@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import Settings
 from app.core.logging import setup_logging
+from app.db.session import create_engine, create_session_factory
 from app.middleware.error_handler import register_error_handlers
 
 
@@ -31,12 +32,16 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.on_event("startup")
     async def startup() -> None:
-        """Startup: e.g. initialize database connection pool (Step 1.2)."""
-        pass
+        """Initialize database connection pool per PRD v2."""
+        engine = create_engine(settings)
+        app.state.db_engine = engine
+        app.state.db_session_factory = create_session_factory(engine)
 
     @app.on_event("shutdown")
     async def shutdown() -> None:
-        """Shutdown: close database connections gracefully (Step 1.2)."""
-        pass
+        """Close database connections gracefully."""
+        engine = getattr(app.state, "db_engine", None)
+        if engine is not None:
+            await engine.dispose()
 
     return app

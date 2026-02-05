@@ -36,12 +36,15 @@ def test_settings_defaults() -> None:
         aws_access_key_id="ak",
         aws_secret_access_key="sk",
         s3_bucket_name="b",
+        redis_url=None,  # Explicit override; default when not configured
     )
     assert settings.environment == "development"
     assert settings.debug is False
     assert settings.api_version == "v1"
     assert settings.database_pool_size == 5
     assert settings.database_max_overflow == 5
+    assert settings.database_pool_timeout == 30
+    assert settings.database_pool_recycle == 3600
     assert settings.jwt_algorithm == "HS256"
     assert settings.jwt_access_token_expire_minutes == 15
     assert settings.frontend_url == "http://localhost:5173"

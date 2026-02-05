@@ -15,10 +15,12 @@ class Settings(BaseSettings):
     debug: bool = False
     api_version: str = "v1"
 
-    # Database
+    # Database (PRD v2: pool 5-10, overflow 5, timeout 30s, recycle 3600s)
     database_url: str
     database_pool_size: int = 5
     database_max_overflow: int = 5
+    database_pool_timeout: int = 30
+    database_pool_recycle: int = 3600
 
     # Security
     secret_key: str
