@@ -2,6 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import health
 from app.core.config import Settings
 from app.core.logging import setup_logging
 from app.db.session import create_engine, create_session_factory
@@ -29,6 +30,8 @@ def create_app(settings: Settings) -> FastAPI:
     )
 
     register_error_handlers(app)
+
+    app.include_router(health.router)
 
     @app.on_event("startup")
     async def startup() -> None:

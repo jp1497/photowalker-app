@@ -1,8 +1,8 @@
-"""Unit tests for SQLAlchemy models. See Step 1.2 - Database Layer."""
 
 import pytest
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import select
+from sqlalchemy import inspect, select
+from sqlalchemy.orm import selectinload
 
 from app.models import Photo, Route, RoutePhoto, RouteTag, Tag, User
 from tests.conftest import requires_postgres
@@ -89,14 +89,22 @@ async def test_model_creation_and_relationships(db_session) -> None:
     db_session.add(route_photo)
     await db_session.flush()
 
-    result = await db_session.execute(select(User).where(User.id == user.id))
+    result = await db_session.execute(
+        select(User)
+        .where(User.id == user.id)
+        .options(selectinload(User.routes), selectinload(User.photos))
+    )
     loaded_user = result.scalar_one()
     assert loaded_user.email == "test@example.com"
     assert len(loaded_user.routes) == 1
     assert loaded_user.routes[0].title == "Test Route"
     assert len(loaded_user.photos) == 1
 
-    result = await db_session.execute(select(Route).where(Route.id == route.id))
+    result = await db_session.execute(
+        select(Route)
+        .where(Route.id == route.id)
+        .options(selectinload(Route.route_photos).selectinload(RoutePhoto.photo))
+    )
     loaded_route = result.scalar_one()
     assert len(loaded_route.route_photos) == 1
     assert loaded_route.route_photos[0].photo.s3_key_original == "photos/user1/photo1/original.jpg"
