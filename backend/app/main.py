@@ -1,4 +1,6 @@
-"""FastAPI application entry point. Factory pattern implemented in Step 1.1."""
-from fastapi import FastAPI
+"""FastAPI application entry point. Uses factory pattern per Step 1.1."""
+from app.core.config import get_settings
+from app.core.factory import create_app
 
-app = FastAPI(title="Photowalker API", version="1.0.0")
+settings = get_settings()
+app = create_app(settings)
