@@ -12,8 +12,8 @@ asyncpg>=0.29.0
 alembic>=1.13.0
 geoalchemy2>=0.14.0
 
-# Auth
-pyjwt>=2.8.0
+# Auth (pyjwt[crypto] for RS256 verification of Google id_token)
+pyjwt[crypto]>=2.8.0
 httpx>=0.26.0
 
 # Storage

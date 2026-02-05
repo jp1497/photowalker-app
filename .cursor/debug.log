@@ -1,4 +1,101 @@
-{"sessionId": "debug-session", "timestamp": 1770326652528, "hypothesisId": "H1", "runId": "post-fix", "location": "test_models.py:after_scalar_one", "message": "after load user, before access routes", "data": {"session_type": "AsyncSession", "query_used_selectinload": true, "user_id": "2e43052c-4114-4e0a-a45b-ae4155209e5f", "routes_in_unloaded": false}}
-{"sessionId": "debug-session", "timestamp": 1770326652528, "hypothesisId": "H3", "runId": "post-fix", "location": "test_models.py:before_routes", "message": "about to access loaded_user.routes", "data": {}}
-{"sessionId": "debug-session", "timestamp": 1770326662230, "hypothesisId": "H1", "runId": "post-fix", "location": "test_models.py:after_scalar_one", "message": "after load user, before access routes", "data": {"session_type": "AsyncSession", "query_used_selectinload": true, "user_id": "77932b2b-a5e1-4cad-a2ed-92b17f62b05a", "routes_in_unloaded": false}}
-{"sessionId": "debug-session", "timestamp": 1770326662230, "hypothesisId": "H3", "runId": "post-fix", "location": "test_models.py:before_routes", "message": "about to access loaded_user.routes", "data": {}}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770330524978,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770330524998,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770330524999,"sessionId":"debug-session"}
+{"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": false, "cookie_keys": [], "hypothesisId": "B,E"}, "timestamp": 1770330525008.476, "sessionId": "debug-session"}
+{"location":"client.ts:401","message":"401 response","data":{"url":"/v1/auth/refresh","status":401,"isRefresh":true,"hypothesisId":"A,D"},"timestamp":1770330525011,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 401","hypothesisId":"D","runId":"post-fix"},"timestamp":1770330525011,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770330591764,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770330748182,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770330748200,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770330748200,"sessionId":"debug-session"}
+{"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": false, "cookie_keys": [], "hypothesisId": "B,E"}, "timestamp": 1770330748208.8452, "sessionId": "debug-session"}
+{"location":"client.ts:401","message":"401 response","data":{"url":"/v1/auth/refresh","status":401,"isRefresh":true,"hypothesisId":"A,D"},"timestamp":1770330748213,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 401","hypothesisId":"D","runId":"post-fix"},"timestamp":1770330748213,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770330754829,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770330834294,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770330834298,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770330834298,"sessionId":"debug-session"}
+{"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": false, "cookie_keys": [], "hypothesisId": "B,E"}, "timestamp": 1770330834304.666, "sessionId": "debug-session"}
+{"location":"client.ts:401","message":"401 response","data":{"url":"/v1/auth/refresh","status":401,"isRefresh":true,"hypothesisId":"A,D"},"timestamp":1770330834307,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 401","hypothesisId":"D","runId":"post-fix"},"timestamp":1770330834307,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770330840472,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770330928042,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770330928044,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770330928045,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 500","hypothesisId":"D","runId":"post-fix"},"timestamp":1770330928049,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770330933636,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770331018586,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770331324120,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770331329997,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770331329998,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 500","hypothesisId":"D","runId":"post-fix"},"timestamp":1770331330010,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770331416201,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770331416205,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770331416205,"sessionId":"debug-session"}
+{"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": false, "cookie_keys": [], "hypothesisId": "B,E"}, "timestamp": 1770331416234.1929, "sessionId": "debug-session"}
+{"location":"client.ts:401","message":"401 response","data":{"url":"/v1/auth/refresh","status":401,"isRefresh":true,"hypothesisId":"A,D"},"timestamp":1770331416235,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 401","hypothesisId":"D","runId":"post-fix"},"timestamp":1770331416236,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770331418843,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770331418846,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770331418846,"sessionId":"debug-session"}
+{"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": false, "cookie_keys": [], "hypothesisId": "B,E"}, "timestamp": 1770331418849.25, "sessionId": "debug-session"}
+{"location":"client.ts:401","message":"401 response","data":{"url":"/v1/auth/refresh","status":401,"isRefresh":true,"hypothesisId":"A,D"},"timestamp":1770331418850,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 401","hypothesisId":"D","runId":"post-fix"},"timestamp":1770331418850,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770331424986,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770331469407,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770331469575,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770331469575,"sessionId":"debug-session"}
+{"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": false, "cookie_keys": [], "hypothesisId": "B,E"}, "timestamp": 1770331469582.607, "sessionId": "debug-session"}
+{"location":"client.ts:401","message":"401 response","data":{"url":"/v1/auth/refresh","status":401,"isRefresh":true,"hypothesisId":"A,D"},"timestamp":1770331469585,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 401","hypothesisId":"D","runId":"post-fix"},"timestamp":1770331469585,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770331476109,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770331498264,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770331498265,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770331500806,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770331500807,"sessionId":"debug-session"}
+{"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": false, "cookie_keys": [], "hypothesisId": "B,E"}, "timestamp": 1770331500824.754, "sessionId": "debug-session"}
+{"location":"client.ts:401","message":"401 response","data":{"url":"/v1/auth/refresh","status":401,"isRefresh":true,"hypothesisId":"A,D"},"timestamp":1770331500826,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 401","hypothesisId":"D","runId":"post-fix"},"timestamp":1770331500826,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770331505035,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770331566669,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332183403,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770332184860,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770332184860,"sessionId":"debug-session"}
+{"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": false, "cookie_keys": [], "hypothesisId": "B,E"}, "timestamp": 1770332184876.3398, "sessionId": "debug-session"}
+{"location":"client.ts:401","message":"401 response","data":{"url":"/v1/auth/refresh","status":401,"isRefresh":true,"hypothesisId":"A,D"},"timestamp":1770332184880,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 401","hypothesisId":"D","runId":"post-fix"},"timestamp":1770332184881,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332191912,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332356969,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770332356989,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770332356989,"sessionId":"debug-session"}
+{"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": false, "cookie_keys": [], "hypothesisId": "B,E"}, "timestamp": 1770332357001.1047, "sessionId": "debug-session"}
+{"location":"client.ts:401","message":"401 response","data":{"url":"/v1/auth/refresh","status":401,"isRefresh":true,"hypothesisId":"A,D"},"timestamp":1770332357004,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 401","hypothesisId":"D","runId":"post-fix"},"timestamp":1770332357005,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332365176,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770332491040,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770332491040,"sessionId":"debug-session"}
+{"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": false, "cookie_keys": [], "hypothesisId": "B,E"}, "timestamp": 1770332491061.12, "sessionId": "debug-session"}
+{"location":"client.ts:401","message":"401 response","data":{"url":"/v1/auth/refresh","status":401,"isRefresh":true,"hypothesisId":"A,D"},"timestamp":1770332491063,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 401","hypothesisId":"D","runId":"post-fix"},"timestamp":1770332491064,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332496358,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332607018,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332607021,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332613012,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332613014,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332614831,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332614830,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332624356,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332624360,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332672053,"sessionId":"debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770332672073,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770332672073,"sessionId":"debug-session"}
+{"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": false, "cookie_keys": [], "hypothesisId": "B,E"}, "timestamp": 1770332672086.559, "sessionId": "debug-session"}
+{"location":"client.ts:401","message":"401 response","data":{"url":"/v1/auth/refresh","status":401,"isRefresh":true,"hypothesisId":"A,D"},"timestamp":1770332672089,"sessionId":"debug-session"}
+{"location":"useAuth.ts:catch","message":"refresh failed","data":{"err":"AxiosError: Request failed with status code 401","hypothesisId":"D","runId":"post-fix"},"timestamp":1770332672090,"sessionId":"debug-session"}
+{"location":"client.ts:init","message":"apiClient baseURL","data":{"baseURL":"","isDev":true},"timestamp":1770332677800,"sessionId":"debug-session"}
+{"location": "auth.py:google", "message": "cookie set", "data": {"hypothesisId": "C"}, "timestamp": 1770332678234.897, "sessionId": "debug-session"}
+{"location":"auth.ts:refresh","message":"refresh called","data":{"url":"/v1/auth/refresh","hypothesisId":"A"},"timestamp":1770332678240,"sessionId":"debug-session"}
+{"location":"client.ts:request","message":"refresh request","data":{"url":"/v1/auth/refresh","hasCredentials":true},"timestamp":1770332678241,"sessionId":"debug-session"}
+{"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": true, "cookie_keys": ["refresh_token"], "hypothesisId": "B,E"}, "timestamp": 1770332678255.731, "sessionId": "debug-session"}
+{"location":"useAuth.ts:initSession","message":"refresh success","data":{"hypothesisId":"D","runId":"post-fix"},"timestamp":1770332678266,"sessionId":"debug-session"}
+{"location": "auth.py:google", "message": "cookie set", "data": {"hypothesisId": "C"}, "timestamp": 1770332678284.664, "sessionId": "debug-session"}

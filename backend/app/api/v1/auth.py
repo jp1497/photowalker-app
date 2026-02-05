@@ -65,6 +65,11 @@ async def auth_google(
         max_age=REFRESH_COOKIE_MAX_AGE,
         path="/",
     )
+    # #region agent log
+    with open("/Users/jakephillips/Documents/photowalker-app/.cursor/debug.log", "a") as _f:
+        import json
+        _f.write(json.dumps({"location": "auth.py:google", "message": "cookie set", "data": {"hypothesisId": "C"}, "timestamp": __import__("time").time() * 1000, "sessionId": "debug-session"}) + "\n")
+    # #endregion
     return response
 
 
@@ -76,6 +81,12 @@ async def auth_refresh(
 ) -> JSONResponse:
     """Refresh access token from refresh_token cookie."""
     refresh_token = request.cookies.get(REFRESH_COOKIE_NAME)
+    # #region agent log
+    _c = dict(request.cookies)
+    with open("/Users/jakephillips/Documents/photowalker-app/.cursor/debug.log", "a") as _f:
+        import json
+        _f.write(json.dumps({"location": "auth.py:refresh", "message": "refresh endpoint", "data": {"has_refresh_cookie": refresh_token is not None, "cookie_keys": list(_c.keys()), "hypothesisId": "B,E"}, "timestamp": __import__("time").time() * 1000, "sessionId": "debug-session"}) + "\n")
+    # #endregion
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

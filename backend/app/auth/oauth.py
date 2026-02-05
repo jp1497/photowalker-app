@@ -1,27 +1,20 @@
 """Google OAuth client - exchange code for user info. See PRD v2 - FR1."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 import httpx
+
+log = logging.getLogger(__name__)
 import jwt
-from jwt import PyJWKClient
-from jwt.exceptions import DecodeError
+from jwt import PyJWKSet
+from jwt.exceptions import DecodeError, PyJWKError
 
 from app.core.config import Settings
 
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
-
-_jwks_client: PyJWKClient | None = None
-
-
-def _get_jwks_client() -> PyJWKClient:
-    """Lazy-initialize Google JWKS client."""
-    global _jwks_client
-    if _jwks_client is None:
-        _jwks_client = PyJWKClient(GOOGLE_JWKS_URL)
-    return _jwks_client
 
 
 @dataclass
@@ -39,6 +32,7 @@ async def exchange_code_for_user_info(settings: Settings, code: str) -> GoogleUs
 
     POSTs to Google token endpoint, decodes id_token to get user claims.
     Returns None if code invalid or exchange fails.
+    Uses httpx for all HTTPS requests (avoids SSL cert issues with Python urllib on macOS).
     """
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -52,32 +46,43 @@ async def exchange_code_for_user_info(settings: Settings, code: str) -> GoogleUs
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-    if response.status_code != 200:
-        return None
-    data = response.json()
-    id_token = data.get("id_token")
-    if not id_token:
-        return None
-    return _decode_google_id_token(id_token, settings.google_client_id)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        id_token = data.get("id_token")
+        if not id_token:
+            return None
+        jwks_response = await client.get(GOOGLE_JWKS_URL)
+        if jwks_response.status_code != 200:
+            return None
+        return _decode_google_id_token(id_token, settings.google_client_id, jwks_response.text)
 
 
-def _decode_google_id_token(id_token: str, client_id: str) -> GoogleUserInfo | None:
+def _decode_google_id_token(id_token: str, client_id: str, jwks_json: str) -> GoogleUserInfo | None:
     """Decode and verify Google id_token JWT. Returns user info or None."""
     try:
-        signing_key = _get_jwks_client().get_signing_key_from_jwt(id_token)
+        header = jwt.get_unverified_header(id_token)
+        kid = header.get("kid")
+        if not kid:
+            log.warning("id_token header missing kid")
+            return None
+        jwks = PyJWKSet.from_json(jwks_json)
+        signing_key = jwks[kid]
         payload = jwt.decode(
             id_token,
             signing_key.key,
             algorithms=["RS256"],
             audience=client_id,
         )
-    except DecodeError:
+    except (KeyError, Exception) as e:
+        log.warning("id_token decode failed: %s: %s", type(e).__name__, e, exc_info=True)
         return None
     sub = payload.get("sub")
     email = payload.get("email")
     name = payload.get("name")
     picture = payload.get("picture")
     if not sub or not email:
+        log.warning("id_token missing sub or email: payload keys=%s", list(payload.keys()))
         return None
     return GoogleUserInfo(
         google_id=sub,
