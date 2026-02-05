@@ -1,7 +1,7 @@
 
 import pytest
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import inspect, select
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.models import Photo, Route, RoutePhoto, RouteTag, Tag, User
