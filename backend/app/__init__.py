@@ -1,0 +1,1 @@
+"""Photowalker API application."""

@@ -1,0 +1,6 @@
+# OpenAPI 3.0 spec - source of truth for Photowalker API
+openapi: 3.0.0
+info:
+  title: Photowalker API
+  version: 1.0.0
+paths: {}
