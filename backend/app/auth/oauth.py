@@ -1,12 +1,9 @@
 """Google OAuth client - exchange code for user info. See PRD v2 - FR1."""
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 
 import httpx
-
-log = logging.getLogger(__name__)
 import jwt
 from jwt import PyJWKSet
 from jwt.exceptions import DecodeError, PyJWKError
@@ -64,7 +61,6 @@ def _decode_google_id_token(id_token: str, client_id: str, jwks_json: str) -> Go
         header = jwt.get_unverified_header(id_token)
         kid = header.get("kid")
         if not kid:
-            log.warning("id_token header missing kid")
             return None
         jwks = PyJWKSet.from_json(jwks_json)
         signing_key = jwks[kid]
@@ -74,15 +70,13 @@ def _decode_google_id_token(id_token: str, client_id: str, jwks_json: str) -> Go
             algorithms=["RS256"],
             audience=client_id,
         )
-    except (KeyError, Exception) as e:
-        log.warning("id_token decode failed: %s: %s", type(e).__name__, e, exc_info=True)
+    except (KeyError, DecodeError, PyJWKError):
         return None
     sub = payload.get("sub")
     email = payload.get("email")
     name = payload.get("name")
     picture = payload.get("picture")
     if not sub or not email:
-        log.warning("id_token missing sub or email: payload keys=%s", list(payload.keys()))
         return None
     return GoogleUserInfo(
         google_id=sub,

@@ -30,13 +30,10 @@ export function useAuth() {
           setAccessToken(access_token);
           const userData = await getMe();
           setUser(userData);
-          fetch('http://127.0.0.1:7242/ingest/e7ab6a1d-b94e-4608-8339-27a255fff356', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.ts:initSession', message: 'refresh success', data: { hypothesisId: 'D', runId: 'post-fix' }, timestamp: Date.now(), sessionId: 'debug-session' }) }).catch(() => {});
-        } catch (e) {
-          fetch('http://127.0.0.1:7242/ingest/e7ab6a1d-b94e-4608-8339-27a255fff356', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'useAuth.ts:catch', message: 'refresh failed', data: { err: String(e), hypothesisId: 'D', runId: 'post-fix' }, timestamp: Date.now(), sessionId: 'debug-session' }) }).catch(() => {});
+        } catch {
           clearUser();
         } finally {
           setLoading(false);
-          // Keep initPromise set so concurrent/re-run effects await it instead of starting new refresh
         }
       })();
       await initPromise;

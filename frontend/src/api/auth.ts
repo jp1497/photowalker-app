@@ -42,7 +42,6 @@ export async function loginWithCode(code: string): Promise<AuthGoogleResponse> {
  * Refresh access token using HTTP-only cookie.
  */
 export async function refresh(): Promise<AuthRefreshResponse> {
-  fetch('http://127.0.0.1:7242/ingest/e7ab6a1d-b94e-4608-8339-27a255fff356', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'auth.ts:refresh', message: 'refresh called', data: { url: '/v1/auth/refresh', hypothesisId: 'A' }, timestamp: Date.now(), sessionId: 'debug-session' }) }).catch(() => {});
   const { data } = await apiClient.post<AuthRefreshResponse>('/v1/auth/refresh');
   return data;
 }
