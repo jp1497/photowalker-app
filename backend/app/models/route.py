@@ -63,3 +63,8 @@ class Route(Base):
         back_populates="route",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def tag_names(self) -> list[str]:
+        """Tag names for serialization (e.g. RouteResponse). Requires route_tags and tag loaded."""
+        return [rt.tag.name for rt in self.route_tags]
