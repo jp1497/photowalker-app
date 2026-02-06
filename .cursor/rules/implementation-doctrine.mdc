@@ -1,0 +1,36 @@
+---
+description: Roadmap implementation, Docker, API verification, and script fallback patterns
+globs: backend/**,Design/**,docker-compose*.yml,README.md,CONTRIBUTING.md,shared/openapi.yaml
+alwaysApply: false
+---
+
+# Implementation & Roadmap Doctrine
+
+## Verify Paths and Contracts Against Code
+
+When configuring healthchecks, OpenAPI, or integration points, **verify paths and contracts against the actual code**. Do not assume from PRD, spec, or documentation.
+
+- Health endpoint: Grep for the router path (e.g. `/health` vs `/v1/health`) in the API modules
+- OpenAPI: The live spec at `/openapi.json` when the app runs is canonical; static specs can drift
+- Docker healthcheck: Use the path that exists in the app; prefer stdlib (e.g. `urllib.request`) over external tools (curl) in slim images
+
+## Definition of Done as Scope Boundary
+
+Use the roadmap step's **Definition of Done** as the authoritative completion checklist. Do not add scope beyond it. Each checkbox in the DoD is a deliverable; when all are satisfied, the step is complete. Avoid over-engineering or "helpful" extras that are outside the step.
+
+## Export Script Fallback
+
+When an automated export script (e.g. OpenAPI from FastAPI app) cannot run due to environment constraints (venv, deps, sandbox, missing env vars), **provide a manual fallback** rather than blocking delivery.
+
+- Option A: Manually author the artifact from route definitions and schemas
+- Option B: Document that the script requires full environment and how to run it; provide a static reference that is "good enough" for the current need
+- Document both the automated path (when env allows) and the manual/fallback path
+
+## Scripts That Import the Application
+
+Scripts that `import app` (or equivalent) trigger full app bootstrap: Settings validation, DB drivers, OAuth config. They require either:
+
+- **(a) Full environment:** venv activated, `.env` present, all deps installed
+- **(b) Minimal env stubs:** Set required env vars in the script before any app import
+
+Document which is required. If the script uses stubs, set them at the top before importing. If it requires full env, state that clearly in the script docstring and in README/CONTRIBUTING.
