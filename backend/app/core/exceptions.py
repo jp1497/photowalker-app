@@ -15,3 +15,7 @@ class PhotoNotFoundError(Exception):
 
 class PhotoForbiddenError(Exception):
     """User is not allowed to perform action on this photo (e.g. not owner)."""
+
+
+class BboxTooLargeError(Exception):
+    """Requested bounding box area exceeds the maximum allowed (50 km²)."""
