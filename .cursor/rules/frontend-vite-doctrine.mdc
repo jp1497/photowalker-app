@@ -1,0 +1,26 @@
+---
+description: Frontend Vite/ESM, third-party API usage, and map control teardown doctrine
+globs: frontend/**/*.ts,frontend/**/*.tsx
+alwaysApply: false
+---
+
+# Frontend & Vite Doctrine
+
+## ESM: No require() in Vite/Browser
+
+- Vite and ESM bundlers do **not** provide CommonJS `require()` in the browser bundle. Using `require('module')` causes `ReferenceError: require is not defined` at runtime.
+- Use static `import` or dynamic `import()` for dependencies. For code-splitting or optional/heavy libs, use `import('module').then(m => ...)` inside effects and handle async setup and cleanup (e.g. cleanupRef, cancelled flag).
+
+## Third-Party API: Verify Method Signatures
+
+- Before calling a library method (e.g. get vs getAll), **verify the actual API** from the package's type definitions (`node_modules/<pkg>/index.d.ts`) or official docs. Assuming the wrong method leads to silent wrong data (null/undefined) and confusing UX (e.g. "draw a route" validation failing despite a visible line).
+- Prefer reading types over docs when they exist; types are the contract the runtime will follow.
+
+## Map + Control Teardown Order
+
+- When a map and a map control (e.g. MapboxDraw, custom overlay) live in **sibling components**, React effect cleanup order between them is **undefined**. The map container may run `map.remove()` before the control runs `map.removeControl(control)`; the control's `onRemove` can then run against an already-destroyed map and throw (e.g. "Cannot read properties of null (reading 'off')").
+- **Defensive teardown:** Wrap control cleanup (listener removal, `removeControl`) in try/catch. Clear your own refs after the try block so cleanup remains idempotent. Alternatively, coordinate so the control is removed before the map is destroyed (e.g. single owner that removes control then map).
+
+## White Screen / No Visible Error
+
+- When the user reports a white page with no error message, the failure is often an uncaught exception that only appears in the console or is swallowed by the framework. **Immediately add:** (1) a root error boundary that catches render errors and displays them on the page, and (2) bootstrap-level handling (e.g. try/catch around createRoot/render, or onUncaughtError) so the real error is shown in the UI. Then reproduce; the next failure will be visible and debuggable.

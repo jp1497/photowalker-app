@@ -1,8 +1,10 @@
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { AuthCallback } from './pages/AuthCallback';
+import { CreateRoute } from './pages/CreateRoute';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
+import { RouteDetail } from './pages/RouteDetail';
 import './App.css';
 
 function App() {
@@ -20,6 +22,9 @@ function App() {
         </Link>
         {isAuthenticated ? (
           <>
+            <Link to="/routes/create" style={{ marginRight: '1rem' }}>
+              Create route
+            </Link>
             <span style={{ marginRight: '1rem' }}>{user?.name}</span>
             <button type="button" onClick={logout}>
               Sign out
@@ -33,6 +38,8 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/routes/create" element={<CreateRoute />} />
+        <Route path="/routes/:slug" element={<RouteDetail />} />
       </Routes>
     </BrowserRouter>
   );
