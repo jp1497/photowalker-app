@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import auth, health, photos, routes
+from app.api.v1 import auth, discovery, health, photos, routes
 from app.core.config import Settings
 from app.core.logging import setup_logging
 from app.db.session import create_engine, create_session_factory
@@ -33,6 +33,7 @@ def create_app(settings: Settings) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(discovery.router)  # GET /v1/routes (browse) before /v1/routes/*
     app.include_router(routes.router)
     app.include_router(photos.router)
 
