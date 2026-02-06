@@ -119,6 +119,7 @@ export function RouteDetail() {
           {isOwner && (
             <button
               type="button"
+              data-testid="route-detail-add-photos"
               onClick={() => setShowUpload((v) => !v)}
               style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem', cursor: 'pointer' }}
             >

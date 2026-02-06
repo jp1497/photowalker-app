@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException
 
@@ -18,7 +19,9 @@ from app.schemas.auth import (
     LogoutResponse,
 )
 from app.schemas.user import UserResponse, UserUpdate
+from app.auth.oauth import GoogleUserInfo
 from app.services.auth_service import (
+    create_or_get_user,
     exchange_code_for_user,
     get_user_by_id,
     issue_tokens,
@@ -29,6 +32,12 @@ REFRESH_COOKIE_NAME = "refresh_token"
 REFRESH_COOKIE_MAX_AGE = 7 * 24 * 3600  # 7 days in seconds
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
+
+
+class TestLoginRequest(BaseModel):
+    """Request body for POST /v1/auth/test-login (E2E only)."""
+
+    secret: str = Field(..., min_length=1)
 
 
 @router.post("/google", response_model=AuthGoogleResponse)
@@ -48,6 +57,45 @@ async def auth_google(
                 "details": None,
             },
         )
+    access_token, refresh_token = issue_tokens(settings, user.id)
+    response = JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "access_token": access_token,
+            "user": UserResponse.model_validate(user).model_dump(mode="json"),
+        },
+    )
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        httponly=True,
+        secure=settings.environment == "production",
+        samesite="lax",
+        max_age=REFRESH_COOKIE_MAX_AGE,
+        path="/",
+    )
+    return response
+
+
+@router.post("/test-login", response_model=AuthGoogleResponse)
+async def auth_test_login(
+    body: TestLoginRequest,
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    """E2E only: exchange shared secret for tokens. Registered only when E2E_TEST_SECRET is set."""
+    if not settings.e2e_test_secret or body.secret != settings.e2e_test_secret:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Not found", "details": None},
+        )
+    info = GoogleUserInfo(
+        google_id="e2e-test-user",
+        email="e2e-test@photowalker.local",
+        name="E2E Test User",
+        avatar_url=None,
+    )
+    user = await create_or_get_user(db, info)
     access_token, refresh_token = issue_tokens(settings, user.id)
     response = JSONResponse(
         status_code=status.HTTP_200_OK,

@@ -13,6 +13,12 @@ const TITLE_MIN = 1;
 const TITLE_MAX = 100;
 const MAX_TAGS = 5;
 
+const E2E_MODE = import.meta.env.VITE_E2E_MODE === 'true';
+const E2E_TEST_COORDS: [number, number][] = [
+  [-122.4, 37.8],
+  [-122.41, 37.81],
+];
+
 export interface RouteFormProps {
   onSubmit: (payload: RouteCreatePayload) => Promise<void>;
   isSubmitting?: boolean;
@@ -103,10 +109,20 @@ export function RouteForm({ onSubmit, isSubmitting = false }: RouteFormProps) {
         <p style={{ fontSize: '0.875rem', color: '#666', marginBottom: '0.5rem' }}>
           Use the draw tool on the map to trace your route. Click to add points, then finish the line.
         </p>
+        {E2E_MODE && (
+          <button
+            type="button"
+            data-testid="create-route-e2e-set-line"
+            onClick={() => setRouteCoordinates(E2E_TEST_COORDS)}
+            style={{ marginBottom: '0.5rem', padding: '0.35rem 0.75rem', fontSize: '0.875rem', cursor: 'pointer' }}
+          >
+            Use test route (E2E)
+          </button>
+        )}
         {errors.geometry && (
           <span style={{ fontSize: '0.875rem', color: '#c00', display: 'block', marginBottom: '0.5rem' }}>{errors.geometry}</span>
         )}
-        <div style={{ height: 320, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden' }}>
+        <div data-testid="create-route-map" style={{ height: 320, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden' }}>
           <MapView
             center={mapCenter}
             zoom={mapZoom}

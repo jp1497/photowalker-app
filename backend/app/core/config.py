@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     rate_limit_uploads_per_minute: int = 10
     rate_limit_routes_per_hour: int = 5
 
+    # E2E testing: when set, POST /v1/auth/test-login accepts this secret and returns tokens for a test user
+    e2e_test_secret: Optional[str] = None
+
     model_config = {"env_file": ".env", "case_sensitive": False}
 
     def __init__(self, **kwargs):

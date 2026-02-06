@@ -106,6 +106,47 @@ def test_get_auth_me_with_valid_token_returns_200_and_user() -> None:
 
 
 @requires_postgres
+def test_post_auth_test_login_with_secret_returns_200_and_tokens() -> None:
+    """POST /v1/auth/test-login with correct E2E secret returns 200 and tokens (E2E only)."""
+    settings = _minimal_settings()
+    settings.e2e_test_secret = "e2e-secret-123"
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/v1/auth/test-login",
+                json={"secret": "e2e-secret-123"},
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert "user" in data
+        assert data["user"]["email"] == "e2e-test@photowalker.local"
+        assert response.cookies.get("refresh_token") is not None
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_post_auth_test_login_with_wrong_secret_returns_404() -> None:
+    """POST /v1/auth/test-login with wrong secret returns 404."""
+    settings = _minimal_settings()
+    settings.e2e_test_secret = "e2e-secret-123"
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/v1/auth/test-login",
+                json={"secret": "wrong"},
+            )
+        assert response.status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
 def test_post_auth_logout_clears_refresh_cookie() -> None:
     """POST /v1/auth/logout clears refresh cookie."""
     app = create_app(_minimal_settings())

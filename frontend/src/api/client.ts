@@ -35,6 +35,10 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  const e2eSecret = import.meta.env.VITE_E2E_SECRET;
+  if (import.meta.env.VITE_E2E_MODE === 'true' && typeof e2eSecret === 'string' && e2eSecret.length > 0) {
+    config.headers['X-E2E-Secret'] = e2eSecret;
+  }
   return config;
 });
 

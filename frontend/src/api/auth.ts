@@ -42,6 +42,14 @@ export async function loginWithCode(code: string): Promise<AuthGoogleResponse> {
 }
 
 /**
+ * E2E only: exchange test secret for tokens. Use when VITE_E2E_MODE is set.
+ */
+export async function loginWithTestSecret(secret: string): Promise<AuthGoogleResponse> {
+  const { data } = await apiClient.post<AuthGoogleResponse>('/v1/auth/test-login', { secret });
+  return data;
+}
+
+/**
  * Refresh access token using HTTP-only cookie.
  */
 export async function refresh(): Promise<AuthRefreshResponse> {

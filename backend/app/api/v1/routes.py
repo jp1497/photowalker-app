@@ -44,7 +44,9 @@ async def create_route(
                 "details": None,
             },
         )
-    return {"route": RouteResponse.model_validate(route).model_dump(mode="json", by_alias=True)}
+    payload = {"route": RouteResponse.model_validate(route).model_dump(mode="json", by_alias=True)}
+    await db.commit()
+    return payload
 
 
 @router.get("/me")

@@ -120,8 +120,8 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
       <div style={{ height: 320, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden' }}>
         <MapView onMapReady={handleMapReady} style={{ width: '100%', height: '100%' }} />
       </div>
-      <section>
-        <h1 style={{ margin: 0, fontSize: '1.75rem' }}>{route.title}</h1>
+      <section data-testid="route-detail-content">
+        <h1 data-testid="route-detail-title" style={{ margin: 0, fontSize: '1.75rem' }}>{route.title}</h1>
         {route.description && (
           <p style={{ color: '#444', marginTop: '0.5rem', marginBottom: 0 }}>{route.description}</p>
         )}

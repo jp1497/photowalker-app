@@ -99,10 +99,18 @@ async def _check_limits(
     """
     Apply rate limits. Return (allowed, retry_after_seconds).
     Limits: 100/min IP, 500/min user, 10 uploads/min user, 5 routes/hour user.
+    E2E: when e2e_test_secret is set, requests with X-E2E-Secret matching it are exempt.
     """
     path = request.scope.get("path", "")
     if path in SKIP_PATHS:
         return True, 0
+
+    if settings.e2e_test_secret:
+        raw = request.headers.get("x-e2e-secret") or ""
+        secret = raw.strip()
+        expected = (settings.e2e_test_secret or "").strip()
+        if secret and secret != "undefined" and expected and secret == expected:
+            return True, 0
 
     method = request.scope.get("method", "GET")
     ip = _client_ip(request)
@@ -135,14 +143,16 @@ async def _check_limits(
             if not allowed:
                 return False, retry
         if method == "POST" and path.rstrip("/") == "/v1/routes":
-            route_key = f"user:{user_id}:route:{hour_bucket}"
-            allowed, retry = await store.check_and_inc(
-                route_key,
-                settings.rate_limit_routes_per_hour,
-                3600.0,
-            )
-            if not allowed:
-                return False, retry
+            # In development with E2E configured, skip route-creation limit so E2E tests don't hit 429
+            if settings.environment != "development" or not settings.e2e_test_secret:
+                route_key = f"user:{user_id}:route:{hour_bucket}"
+                allowed, retry = await store.check_and_inc(
+                    route_key,
+                    settings.rate_limit_routes_per_hour,
+                    3600.0,
+                )
+                if not allowed:
+                    return False, retry
     else:
         # Unauthenticated: IP limit 100/min
         ip_key = f"ip:{ip}:min:{minute_bucket}"
