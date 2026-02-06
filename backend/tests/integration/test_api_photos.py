@@ -116,8 +116,8 @@ def test_post_photos_with_valid_jpeg_gps_returns_201() -> None:
 
 
 @requires_postgres
-def test_post_photos_with_jpeg_without_gps_returns_400() -> None:
-    """POST /v1/photos with JPEG without GPS returns 400."""
+def test_post_photos_with_jpeg_without_gps_returns_201_with_null_location() -> None:
+    """POST /v1/photos with JPEG without GPS returns 201, photo with location=null (PRD v3 FR-R3)."""
     settings = _photo_settings()
     app = create_app(settings)
     app.dependency_overrides[get_settings] = lambda: settings
@@ -137,9 +137,10 @@ def test_post_photos_with_jpeg_without_gps_returns_400() -> None:
                 files={"file": ("photo.jpg", MINIMAL_JPEG, "image/jpeg")},
                 data={"route_ids": f'["{route_id}"]'},
             )
-        assert upload_resp.status_code == 400
-        assert upload_resp.json()["error"]["code"] == "VALIDATION_ERROR"
-        assert "GPS" in upload_resp.json()["error"]["message"]
+        assert upload_resp.status_code == 201
+        data = upload_resp.json()
+        assert "photo" in data
+        assert data["photo"]["location"] is None
     finally:
         app.dependency_overrides.pop(get_settings, None)
 

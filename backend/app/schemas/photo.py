@@ -23,7 +23,7 @@ class PhotoResponse(BaseModel):
     id: UUID
     user_id: UUID
     caption: Optional[str] = None
-    location: dict[str, Any]
+    location: Optional[dict[str, Any]] = None
     s3_key_original: str
     s3_key_thumbnail: Optional[str] = None
     file_size_bytes: int
@@ -33,14 +33,42 @@ class PhotoResponse(BaseModel):
 
     @field_validator("location", mode="before")
     @classmethod
-    def serialize_location(cls, v: Any) -> dict[str, Any]:
+    def serialize_location(cls, v: Any) -> Optional[dict[str, Any]]:
+        if v is None:
+            return None
         if isinstance(v, dict):
             return v
         return _point_to_geojson(v)
 
 
+def _validate_geojson_point(v: dict[str, Any]) -> tuple[float, float]:
+    """Validate GeoJSON Point; return (lon, lat). Raises ValueError if invalid."""
+    if not isinstance(v, dict):
+        raise ValueError("location must be an object")
+    if v.get("type") != "Point":
+        raise ValueError("location type must be Point")
+    coords = v.get("coordinates")
+    if not isinstance(coords, (list, tuple)) or len(coords) < 2:
+        raise ValueError("location must have coordinates [lon, lat]")
+    lon, lat = float(coords[0]), float(coords[1])
+    if not (-180 <= lon <= 180):
+        raise ValueError("longitude must be in [-180, 180]")
+    if not (-90 <= lat <= 90):
+        raise ValueError("latitude must be in [-90, 90]")
+    return (lon, lat)
+
+
 class PhotoUpdate(BaseModel):
-    """Request body for PATCH /v1/photos/{id}: caption and route associations."""
+    """Request body for PATCH /v1/photos/{id}: caption, route associations, location."""
 
     caption: Optional[str] = Field(None, max_length=500)
     route_ids: Optional[list[UUID]] = None
+    location: Optional[dict[str, Any]] = Field(None, description="GeoJSON Point {type: 'Point', coordinates: [lon, lat]}")
+
+    @field_validator("location")
+    @classmethod
+    def validate_location(cls, v: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+        if v is None:
+            return None
+        _validate_geojson_point(v)
+        return v

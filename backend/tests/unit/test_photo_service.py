@@ -60,8 +60,10 @@ async def test_upload_photo_rejects_non_jpeg(db_session: AsyncSession) -> None:
 
 @requires_postgres
 @pytest.mark.asyncio
-async def test_upload_photo_rejects_when_no_gps_in_exif(db_session: AsyncSession) -> None:
-    """upload_photo raises ValueError when image has no GPS in EXIF."""
+async def test_upload_photo_with_no_gps_creates_photo_with_null_location(
+    db_session: AsyncSession,
+) -> None:
+    """upload_photo with no EXIF GPS creates photo with location=NULL (PRD v3 FR-R3)."""
     user = User(google_id="g1", email="u1@example.com", name="User One")
     db_session.add(user)
     await db_session.flush()
@@ -76,10 +78,11 @@ async def test_upload_photo_rejects_when_no_gps_in_exif(db_session: AsyncSession
     db_session.add(route)
     await db_session.flush()
     settings = _local_storage_settings()
-    with pytest.raises(ValueError, match="no GPS"):
-        await photo_service.upload_photo(
-            db_session, settings, user.id, MINIMAL_JPEG, "image/jpeg", None, [route.id]
-        )
+    photo = await photo_service.upload_photo(
+        db_session, settings, user.id, MINIMAL_JPEG, "image/jpeg", None, [route.id]
+    )
+    assert photo.location is None
+    assert photo.user_id == user.id
 
 
 @requires_postgres
@@ -125,6 +128,30 @@ async def test_upload_photo_creates_photo_and_route_photos(db_session: AsyncSess
     assert len(route_photos) == 1
     assert route_photos[0].route_id == route.id
     assert route_photos[0].display_order == 0
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_upload_photo_with_route_ids_empty_creates_photo_without_route_photos(
+    db_session: AsyncSession,
+) -> None:
+    """upload_photo with route_ids=[] creates photo without route_photos (for new route creation)."""
+    from unittest.mock import patch
+
+    user = User(google_id="g2b", email="u2b@example.com", name="User Two B")
+    db_session.add(user)
+    await db_session.flush()
+    settings = _local_storage_settings()
+    with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
+        with patch("app.services.photo_service.extract_captured_at", return_value=None):
+            photo = await photo_service.upload_photo(
+                db_session, settings, user.id, MINIMAL_JPEG, "image/jpeg", None, []
+            )
+    assert photo.id is not None
+    r = await db_session.execute(
+        select(RoutePhoto).where(RoutePhoto.photo_id == photo.id)
+    )
+    assert len(r.scalars().all()) == 0
 
 
 @requires_postgres
@@ -221,6 +248,77 @@ async def test_update_photo_not_found_raises(db_session: AsyncSession) -> None:
 
     with pytest.raises(PhotoNotFoundError):
         await photo_service.update_photo(db_session, uuid4(), user.id, "Cap", None)
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_update_photo_with_location_updates_photo_location(
+    db_session: AsyncSession,
+) -> None:
+    """update_photo with location updates photo.location (PRD v3 FR-R3)."""
+    user = User(google_id="g10", email="u10@example.com", name="User Ten")
+    db_session.add(user)
+    await db_session.flush()
+    photo = Photo(
+        user_id=user.id,
+        s3_key_original="photos/u/p10/original.jpg",
+        location=WKTElement("POINT(-122.4 37.8)", srid=4326),
+        file_size_bytes=100,
+    )
+    db_session.add(photo)
+    await db_session.flush()
+
+    updated = await photo_service.update_photo(
+        db_session,
+        photo.id,
+        user.id,
+        None,
+        None,
+        location={"type": "Point", "coordinates": [-122.5, 37.9]},
+    )
+    assert updated.location is not None
+    from geoalchemy2.shape import to_shape
+    point = to_shape(updated.location)
+    assert point.x == pytest.approx(-122.5)
+    assert point.y == pytest.approx(37.9)
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_update_photo_with_invalid_coordinates_raises(
+    db_session: AsyncSession,
+) -> None:
+    """update_photo with invalid coordinates raises ValueError."""
+    user = User(google_id="g11", email="u11@example.com", name="User Eleven")
+    db_session.add(user)
+    await db_session.flush()
+    photo = Photo(
+        user_id=user.id,
+        s3_key_original="photos/u/p11/original.jpg",
+        location=WKTElement("POINT(-122.4 37.8)", srid=4326),
+        file_size_bytes=100,
+    )
+    db_session.add(photo)
+    await db_session.flush()
+
+    with pytest.raises(ValueError, match="longitude"):
+        await photo_service.update_photo(
+            db_session,
+            photo.id,
+            user.id,
+            None,
+            None,
+            location={"type": "Point", "coordinates": [200, 37.9]},
+        )
+    with pytest.raises(ValueError, match="latitude"):
+        await photo_service.update_photo(
+            db_session,
+            photo.id,
+            user.id,
+            None,
+            None,
+            location={"type": "Point", "coordinates": [-122.5, 100]},
+        )
 
 
 @requires_postgres
