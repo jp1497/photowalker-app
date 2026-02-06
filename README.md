@@ -10,6 +10,7 @@ Photowalker enables photographers to create curated routes on a map, attach geol
 
 - **[Product Requirements Document (PRD v2)](./Design/PRD_v2.md)** - Complete specification including database design, project structure, API contracts, and requirements.
 - **[Implementation Roadmap](./Design/IMPLEMENTATION_ROADMAP.md)** - Phased implementation plan with committable steps, unit tests, and UAT.
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - How to run locally, run tests, deploy; references design authority.
 - **[Project Proposal](./Design/PROJECT_PROPOSAL.md)** - Non-technical project overview.
 
 ## Quick Start
@@ -72,6 +73,24 @@ photowalker-app/
 
 See [PRD v2](./Design/PRD_v2.md) for detailed project structure.
 
+## Testing
+
+- **Backend:** From `backend/`, run `pytest` (requires Postgres; CI uses `photowalker_test` DB)
+- **Frontend:** From `frontend/`, run `npm run test` (Vitest)
+- **E2E:** From `frontend/`, run `npm run test:e2e` (Playwright; requires `docker compose up -d` and backend/frontend running)
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for full development workflow.
+
+## API Documentation
+
+When the backend runs in development:
+
+- **Swagger UI:** http://localhost:8000/docs
+- **ReDoc:** http://localhost:8000/redoc
+- **OpenAPI JSON:** http://localhost:8000/openapi.json
+
+Static reference: [shared/openapi.yaml](./shared/openapi.yaml)
+
 ## Tech Stack
 
 - **Backend:** FastAPI, PostgreSQL + PostGIS, SQLAlchemy, Alembic
@@ -83,8 +102,8 @@ See [PRD v2](./Design/PRD_v2.md) for complete technology stack details.
 
 ## Status
 
-**Current Phase:** Phase 0 Complete (Project Foundation)  
-**Next Phase:** Phase 1 - Backend Foundation (Step 1.1: Core Application Setup)
+**Current Phase:** Phase 7 - Integration & Polish (complete)  
+**Reference:** [Implementation Roadmap](./Design/IMPLEMENTATION_ROADMAP.md)
 
 ## Troubleshooting
 
