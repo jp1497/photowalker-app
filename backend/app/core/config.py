@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     aws_secret_access_key: str
     aws_region: str = "us-east-1"
     s3_bucket_name: str
+    # Local file storage for development when S3 not configured (e.g. ./local_uploads)
+    local_storage_path: Optional[str] = None
 
     # Frontend (CORS)
     frontend_url: str = "http://localhost:5173"
