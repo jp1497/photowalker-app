@@ -29,5 +29,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # Thumbnail worker (Step 4.3). Requires backend/.env with all Settings; REDIS_URL/DATABASE_URL overridden here.
+  worker:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://photowalker:photowalker@postgres:5432/photowalker
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command: sh -c "pip install -q -r requirements.txt && rq worker thumbnails"
+
 volumes:
   postgres_data: {}

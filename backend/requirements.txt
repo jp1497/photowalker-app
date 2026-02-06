@@ -27,6 +27,10 @@ pyproj>=3.6.0
 pillow>=10.2.0
 exifread>=3.0.0
 
+# Async jobs (thumbnail worker)
+rq>=1.15.0
+psycopg2-binary>=2.9.0
+
 # Multipart
 python-multipart>=0.0.6
 

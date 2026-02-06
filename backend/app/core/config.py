@@ -49,6 +49,14 @@ class Settings(BaseSettings):
 
     model_config = {"env_file": ".env", "case_sensitive": False}
 
+    @property
+    def sync_database_url(self) -> str:
+        """Database URL for sync drivers (e.g. psycopg2 in thumbnail worker)."""
+        url = self.database_url
+        if "+asyncpg" in url:
+            return url.replace("+asyncpg", "+psycopg2", 1)
+        return url
+
 
 @lru_cache
 def get_settings() -> Settings:

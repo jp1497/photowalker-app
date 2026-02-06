@@ -92,6 +92,24 @@ def delete_file(settings: Settings, key: str) -> None:
     client.delete_object(Bucket=settings.s3_bucket_name, Key=key)
 
 
+def get_file_content(settings: Settings, key: str) -> bytes:
+    """Read file at key. Uses S3 if configured, otherwise local filesystem. Raises if missing."""
+    if _use_local_storage(settings):
+        path = _local_path(settings, key)
+        with open(path, "rb") as f:
+            return f.read()
+    if not _is_s3_configured(settings):
+        raise ValueError("S3 not configured and local_storage_path not set")
+    client = boto3.client(
+        "s3",
+        region_name=settings.aws_region,
+        aws_access_key_id=settings.aws_access_key_id,
+        aws_secret_access_key=settings.aws_secret_access_key,
+    )
+    resp = client.get_object(Bucket=settings.s3_bucket_name, Key=key)
+    return resp["Body"].read()
+
+
 def get_presigned_url(
     settings: Settings,
     key: str,

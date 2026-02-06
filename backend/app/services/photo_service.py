@@ -16,15 +16,11 @@ from app.models.photo import Photo
 from app.models.route_photo import RoutePhoto
 from app.storage.s3 import delete_file, photo_original_key, upload_file
 from app.utils.exif import MAX_PHOTO_BYTES, extract_captured_at, extract_gps
+from app.workers.thumbnail_job import enqueue_thumbnail_job
 
 MAX_PHOTOS_PER_ROUTE = 50
 CAPTION_MAX_LEN = 500
 JPEG_HEADER = b"\xff\xd8\xff"
-
-
-def _enqueue_thumbnail_job(photo_id: UUID) -> None:
-    """No-op until Step 4.3 implements thumbnail worker. Called after photo created."""
-    pass
 
 
 async def upload_photo(
@@ -80,7 +76,7 @@ async def upload_photo(
         db.add(rp)
     await db.flush()
 
-    _enqueue_thumbnail_job(photo.id)
+    enqueue_thumbnail_job(photo.id, settings)
 
     result = await db.execute(
         select(Photo).where(Photo.id == photo.id).options(selectinload(Photo.route_photos))
