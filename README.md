@@ -39,12 +39,14 @@ npm run dev
 
 ### Development Environment
 
-Start PostgreSQL (with PostGIS) and Redis. Run from the **project root** (where `docker-compose.yml` lives):
+Start the full stack (PostgreSQL with PostGIS, Redis, backend API, thumbnail worker). Run from the **project root** (where `docker-compose.yml` lives):
 
 ```bash
 # From project root (photowalker-app/)
 docker compose up -d
 ```
+
+This starts postgres, redis, backend (on port 8000), and the thumbnail worker. For backend development with hot reload, run uvicorn locally (see Backend above) and use the containerized postgres/redis; stop the backend service with `docker compose stop backend` to avoid port conflict.
 
 If you see `Bind for 0.0.0.0:5432 failed: port is already allocated`, port 5432 is in use. Either stop the process using it (e.g. an existing Postgres container) or use an alternate host port (see [Troubleshooting](#troubleshooting) below).
 
@@ -112,6 +114,55 @@ Docker reports `Bind for 0.0.0.0:5432 failed: port is already allocated` when so
 
 On Apple Silicon, you may see a warning that the PostGIS image is linux/amd64. The container still runs under emulation. To use an ARM image instead, set in `docker-compose.yml` under the postgres service:  
 `platform: linux/arm64` (only if the image supports it; postgis/postgis may not publish arm64).
+
+## Deployment
+
+### Docker
+
+The backend is containerized per [PRD v2 - Containerization](./Design/PRD_v2.md#containerization). Build and run the full stack (Postgres, Redis, backend API, thumbnail worker) from the **project root**:
+
+```bash
+# Ensure backend/.env exists (copy from backend/.env.example and configure)
+docker compose up -d
+```
+
+The API listens on `http://localhost:8000`. Health check: `http://localhost:8000/health`
+
+### Build the backend image only
+
+```bash
+docker build -t photowalker-api ./backend
+docker run -p 8000:8000 --env-file backend/.env photowalker-api
+```
+
+For a standalone run, set `DATABASE_URL` and `REDIS_URL` to point at your Postgres and Redis instances.
+
+### Production
+
+Use the production override for restart policies and production environment:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Before deploying to production:
+
+1. Set `ENVIRONMENT=production`, `DEBUG=false` in `backend/.env`
+2. Use a strong `SECRET_KEY` (e.g. `openssl rand -hex 32`)
+3. Configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` for your production domain
+4. Configure S3 (or compatible) credentials and bucket
+5. Set `FRONTEND_URL` to your frontend origin for CORS
+6. Run migrations: `docker compose exec backend alembic upgrade head` (if Alembic is in the image; otherwise run migrations before or during deployment)
+
+### Database migrations
+
+Run migrations when the backend container is up:
+
+```bash
+docker compose exec backend alembic upgrade head
+```
+
+Note: Alembic is included in the backend image. Ensure `DATABASE_URL` in the container points at the Postgres service (`postgres:5432` when using docker-compose).
 
 ## License
 
