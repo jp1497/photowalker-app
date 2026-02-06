@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     # Redis (optional, for thumbnail queue and scaling)
     redis_url: Optional[str] = None
 
+    # Rate limiting (NFR4): req/min per IP, per authenticated user, uploads/min, routes/hour
+    rate_limit_ip_per_minute: int = 100
+    rate_limit_user_per_minute: int = 500
+    rate_limit_uploads_per_minute: int = 10
+    rate_limit_routes_per_hour: int = 5
+
     model_config = {"env_file": ".env", "case_sensitive": False}
 
     def __init__(self, **kwargs):

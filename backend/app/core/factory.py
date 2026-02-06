@@ -7,6 +7,7 @@ from app.core.config import Settings
 from app.core.logging import setup_logging
 from app.db.session import create_engine, create_session_factory
 from app.middleware.error_handler import register_error_handlers
+from app.middleware.rate_limit import RateLimitMiddleware
 
 
 def create_app(settings: Settings) -> FastAPI:
@@ -28,6 +29,7 @@ def create_app(settings: Settings) -> FastAPI:
         allow_headers=["*"],
         max_age=3600,
     )
+    app.add_middleware(RateLimitMiddleware, settings=settings)
 
     register_error_handlers(app)
 
