@@ -1,14 +1,15 @@
-/** Route detail page. Fetch by slug, display route (minimal for Step 3.3; full map/gallery in 3.4). */
+/** Route detail page. Fetch by slug, display map + gallery + metadata. */
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getRouteBySlug } from '../api/routes';
-import type { Route } from '../types/route';
+import { RouteView } from '../components/routes/RouteView';
+import type { RouteDetailResponse } from '../types/route';
 
 export function RouteDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const [route, setRoute] = useState<Route | null>(null);
+  const [data, setData] = useState<RouteDetailResponse | null>(null);
   const [loading, setLoading] = useState(!!slug);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; status?: number } | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -18,15 +19,13 @@ export function RouteDetail() {
     setError(null);
     getRouteBySlug(slug)
       .then((res) => {
-        if (!cancelled) {
-          setRoute(res.route);
-        }
+        if (!cancelled) setData(res);
       })
       .catch((err) => {
         if (!cancelled) {
           const status = err.response?.status;
-          const msg = err.response?.data?.error?.message ?? (status === 404 ? 'Route not found' : status === 403 ? 'You do not have access to this route' : 'Failed to load route');
-          setError(msg);
+          const msg = err.response?.data?.error?.message ?? (status === 404 ? 'Route not found' : status === 403 ? 'This route is private.' : 'Failed to load route.');
+          setError({ message: msg, status });
         }
       })
       .finally(() => {
@@ -50,29 +49,54 @@ export function RouteDetail() {
     return <p style={{ padding: '2rem', textAlign: 'center' }}>Loading route...</p>;
   }
 
-  if (error || !route) {
+  if (error || !data) {
+    const is404 = error?.status === 404;
+    const is403 = error?.status === 403;
     return (
       <div style={{ padding: '2rem' }}>
-        <p>{error ?? 'Route not found'}</p>
+        <h2 style={{ marginTop: 0 }}>{is404 ? 'Route not found' : is403 ? 'Private route' : 'Error'}</h2>
+        <p>{error?.message ?? 'Route not found'}</p>
         <Link to="/">Home</Link>
       </div>
     );
   }
 
-  const pointCount = route.route_geometry?.coordinates?.length ?? 0;
+  const { route, photos } = data;
 
   return (
     <div style={{ padding: '2rem' }}>
       <p style={{ marginBottom: '1rem' }}>
         <Link to="/">Home</Link> / <Link to="/routes/create">Create route</Link>
       </p>
-      <h1>{route.title}</h1>
-      <p style={{ color: '#666' }}>Slug: {route.slug}</p>
-      {route.description && <p>{route.description}</p>}
-      <p>Distance: {(route.distance_meters / 1000).toFixed(2)} km</p>
-      <p>Points: {pointCount}</p>
-      {route.tags.length > 0 && <p>Tags: {route.tags.join(', ')}</p>}
-      <p>{route.is_public ? 'Public' : 'Private'}</p>
+      <RouteView route={route} photos={photos} />
+      <section style={{ marginTop: '1.5rem' }}>
+        <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Photos</h2>
+        {photos.length === 0 ? (
+          <p style={{ color: '#666' }}>No photos yet.</p>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+            {photos.map((photo) => (
+              <li key={photo.id} style={{ width: 120 }}>
+                <div
+                  style={{
+                    aspectRatio: '1',
+                    background: '#eee',
+                    borderRadius: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.75rem',
+                    color: '#666',
+                  }}
+                >
+                  Photo
+                </div>
+                {photo.caption && <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem' }}>{photo.caption}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
