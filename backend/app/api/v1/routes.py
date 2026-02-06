@@ -14,7 +14,7 @@ from app.db.dependencies import get_db
 from app.models.user import User
 from app.schemas.photo import PhotoResponse
 from app.schemas.route import RouteCreate, RouteResponse, RouteUpdate
-from app.services import route_service
+from app.services import photo_service, route_service
 
 router = APIRouter(prefix="/v1/routes", tags=["routes"])
 
@@ -45,6 +45,32 @@ async def create_route(
             },
         )
     return {"route": RouteResponse.model_validate(route).model_dump(mode="json", by_alias=True)}
+
+
+@router.get("/{route_id}/photos")
+async def get_route_photos(
+    route_id: UUID,
+    order: str = "display_order",
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+) -> dict:
+    """Get photos for route. Private routes require owner auth. Order: display_order | captured_at."""
+    route = await route_service.get_route_by_id(db, route_id)
+    if route is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Route not found", "details": None},
+        )
+    if not route.is_public:
+        if current_user is None or current_user.id != route.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "FORBIDDEN", "message": "Route is private", "details": None},
+            )
+    if order not in ("display_order", "captured_at"):
+        order = "display_order"
+    photos = await photo_service.get_photos_by_route(db, route_id, order)
+    return {"photos": [PhotoResponse.model_validate(p).model_dump(mode="json") for p in photos]}
 
 
 @router.get("/{slug}")

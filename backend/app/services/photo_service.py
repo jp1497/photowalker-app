@@ -97,6 +97,8 @@ async def get_photos_by_route(
     )
     if order == "display_order":
         q = q.order_by(RoutePhoto.display_order, Photo.created_at)
+    elif order == "captured_at":
+        q = q.order_by(Photo.captured_at.desc().nullslast(), Photo.created_at.desc())
     else:
         q = q.order_by(Photo.created_at.desc())
     result = await db.execute(q)
