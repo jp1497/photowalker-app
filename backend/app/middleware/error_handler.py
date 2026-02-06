@@ -9,6 +9,20 @@ from starlette.exceptions import HTTPException
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_validation_errors(errors: list) -> list:
+    """Convert Pydantic validation errors to JSON-serializable form (ctx may contain Exception)."""
+    out = []
+    for e in errors:
+        c = dict(e)
+        if "ctx" in c and isinstance(c["ctx"], dict):
+            ctx = {}
+            for k, v in c["ctx"].items():
+                ctx[k] = str(v) if isinstance(v, BaseException) else v
+            c["ctx"] = ctx
+        out.append(c)
+    return out
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """Register exception handlers for validation, HTTP, and generic exceptions."""
 
@@ -16,13 +30,20 @@ def register_error_handlers(app: FastAPI) -> None:
     async def validation_exception_handler(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        errors = _sanitize_validation_errors(exc.errors())
+        first_msg = errors[0].get("msg", "") if errors else ""
+        message = (
+            first_msg
+            if first_msg and "value_error" in str(errors[0].get("type", ""))
+            else "Invalid request data"
+        )
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Invalid request data",
-                    "details": exc.errors(),
+                    "message": message,
+                    "details": errors,
                 }
             },
         )

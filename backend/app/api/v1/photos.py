@@ -44,7 +44,7 @@ async def upload_photo(
     current_user: User = Depends(get_current_user_required),
     settings: Settings = Depends(get_settings),
 ) -> dict:
-    """Upload photo (JPEG, max 10MB). EXIF GPS required. Request timeout 60s for large uploads."""
+    """Upload photo (JPEG, max 10MB). EXIF GPS optional; if missing, location=null. Request timeout 60s for large uploads."""
     content = await file.read()
     route_id_list = _parse_route_ids(route_ids)
     try:
@@ -76,7 +76,7 @@ async def update_photo(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_required),
 ) -> dict:
-    """Update photo caption and/or route associations. Owner only."""
+    """Update photo caption, route associations, and/or location. Owner only."""
     try:
         photo = await photo_service.update_photo(
             db,
@@ -84,6 +84,7 @@ async def update_photo(
             current_user.id,
             body.caption,
             body.route_ids,
+            body.location,
         )
     except PhotoNotFoundError:
         raise HTTPException(
