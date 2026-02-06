@@ -3,6 +3,7 @@
 
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
+gunicorn>=21.0.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
 
@@ -12,16 +13,24 @@ asyncpg>=0.29.0
 alembic>=1.13.0
 geoalchemy2>=0.14.0
 
-# Auth
-pyjwt>=2.8.0
+# Auth (pyjwt[crypto] for RS256 verification of Google id_token)
+pyjwt[crypto]>=2.8.0
 httpx>=0.26.0
 
 # Storage
 boto3>=1.34.0
 
+# Geometry (validation and geodesic distance for routes)
+shapely>=2.0.0
+pyproj>=3.6.0
+
 # Image / EXIF
 pillow>=10.2.0
 exifread>=3.0.0
+
+# Async jobs (thumbnail worker)
+rq>=1.15.0
+psycopg2-binary>=2.9.0
 
 # Multipart
 python-multipart>=0.0.6

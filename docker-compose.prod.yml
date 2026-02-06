@@ -1,0 +1,22 @@
+# Production override for Photowalker deployment
+# Use: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# See Design/IMPLEMENTATION_ROADMAP.md Step 7.3
+
+services:
+  backend:
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+    restart: unless-stopped
+    # Do not expose port if behind reverse proxy (Traefik, Caddy, nginx)
+    # ports:
+    #   - "8000:8000"
+
+  worker:
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped

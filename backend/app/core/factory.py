@@ -2,9 +2,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import auth, discovery, health, photos, routes
 from app.core.config import Settings
 from app.core.logging import setup_logging
+from app.db.session import create_engine, create_session_factory
 from app.middleware.error_handler import register_error_handlers
+from app.middleware.rate_limit import RateLimitMiddleware
 
 
 def create_app(settings: Settings) -> FastAPI:
@@ -26,17 +29,28 @@ def create_app(settings: Settings) -> FastAPI:
         allow_headers=["*"],
         max_age=3600,
     )
+    app.add_middleware(RateLimitMiddleware, settings=settings)
 
     register_error_handlers(app)
 
+    app.include_router(health.router)
+    app.include_router(auth.router)
+    app.include_router(discovery.router)  # GET /v1/routes (browse) before /v1/routes/*
+    app.include_router(routes.router)
+    app.include_router(photos.router)
+
     @app.on_event("startup")
     async def startup() -> None:
-        """Startup: e.g. initialize database connection pool (Step 1.2)."""
-        pass
+        """Initialize database connection pool per PRD v2."""
+        engine = create_engine(settings)
+        app.state.db_engine = engine
+        app.state.db_session_factory = create_session_factory(engine)
 
     @app.on_event("shutdown")
     async def shutdown() -> None:
-        """Shutdown: close database connections gracefully (Step 1.2)."""
-        pass
+        """Close database connections gracefully."""
+        engine = getattr(app.state, "db_engine", None)
+        if engine is not None:
+            await engine.dispose()
 
     return app

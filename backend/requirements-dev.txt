@@ -9,3 +9,6 @@ pytest-cov>=4.1.0
 # Linting and type checking
 ruff>=0.1.0
 mypy>=1.8.0
+
+# E2E fixture: create JPEG with EXIF GPS
+piexif>=1.1.0

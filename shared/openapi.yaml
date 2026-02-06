@@ -1,6 +1,370 @@
-# OpenAPI 3.0 spec - source of truth for Photowalker API
+# OpenAPI 3.0 - Photowalker API
+# Canonical spec when backend runs: GET /openapi.json
+# Sync: cd backend && python scripts/export_openapi.py ../shared/openapi.json
+# See Design/PRD_v2.md - API Specification
+
 openapi: 3.0.0
 info:
   title: Photowalker API
   version: 1.0.0
-paths: {}
+  description: Create, share, and discover photowalk routes with geolocated photos.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Basic health check
+      responses:
+        "200":
+          description: Application running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: healthy }
+
+  /health/db:
+    get:
+      tags: [health]
+      summary: Database connectivity
+      responses:
+        "200":
+          description: Database connected
+        "503":
+          description: Database unreachable
+
+  /health/storage:
+    get:
+      tags: [health]
+      summary: S3 storage connectivity
+      responses:
+        "200":
+          description: Storage connected
+        "503":
+          description: Storage unreachable or not configured
+
+  /v1/auth/google:
+    post:
+      tags: [auth]
+      summary: Exchange Google OAuth code for tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        "200":
+          description: Tokens issued; refresh_token in HTTP-only cookie
+        "400":
+          description: Invalid or expired authorization code
+
+  /v1/auth/test-login:
+    post:
+      tags: [auth]
+      summary: E2E test login (E2E_TEST_SECRET required)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [secret]
+              properties:
+                secret: { type: string }
+      responses:
+        "200":
+          description: Test tokens issued
+        "400":
+          description: Invalid secret
+
+  /v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Refresh access token using refresh_token cookie
+      responses:
+        "200":
+          description: New access token
+        "401":
+          description: Invalid or expired refresh token
+
+  /v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Log out (clear refresh_token cookie)
+      responses:
+        "200":
+          description: Logged out
+
+  /v1/auth/me:
+    get:
+      tags: [auth]
+      summary: Get current user (auth required)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Current user
+        "401":
+          description: Unauthorized
+    patch:
+      tags: [auth]
+      summary: Update current user (auth required)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                default_map_location: { type: object }
+      responses:
+        "200":
+          description: Updated user
+        "401":
+          description: Unauthorized
+
+  /v1/routes:
+    get:
+      tags: [discovery]
+      summary: Browse public routes
+      parameters:
+        - name: bbox
+          in: query
+          schema: { type: string }
+          description: min_lon,min_lat,max_lon,max_lat
+        - name: tags
+          in: query
+          schema: { type: string }
+          description: Comma-separated tag names
+        - name: author_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, default: 20, minimum: 1, maximum: 50 }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [created_at, distance] }
+      responses:
+        "200":
+          description: Paginated routes
+    post:
+      tags: [routes]
+      summary: Create route (auth required)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, coordinates]
+              properties:
+                title: { type: string }
+                description: { type: string }
+                tags: { type: array, items: { type: string } }
+                slug: { type: string }
+                coordinates:
+                  type: array
+                  items: { type: array, items: { type: number } }
+      responses:
+        "201":
+          description: Route created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /v1/routes/me:
+    get:
+      tags: [routes]
+      summary: Get current user's routes (auth required)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: User's routes
+        "401":
+          description: Unauthorized
+
+  /v1/routes/{route_id}/photos:
+    get:
+      tags: [routes]
+      summary: Get photos for route
+      parameters:
+        - name: route_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: order
+          in: query
+          schema: { type: string, enum: [display_order, captured_at] }
+      responses:
+        "200":
+          description: Route with photos
+        "404":
+          description: Route not found
+        "403":
+          description: Private route, not owner
+
+  /v1/routes/{slug}:
+    get:
+      tags: [routes]
+      summary: Get route by slug (public or owner)
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Route with photos
+        "404":
+          description: Route not found
+        "403":
+          description: Private route, not owner
+
+  /v1/routes/{route_id}:
+    parameters:
+      - name: route_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [routes]
+      summary: Update route (owner only)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                description: { type: string }
+                tags: { type: array, items: { type: string } }
+                is_public: { type: boolean }
+      responses:
+        "200":
+          description: Route updated
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Route not found
+    delete:
+      tags: [routes]
+      summary: Delete route (owner only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "204":
+          description: Route deleted
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Route not found
+
+  /v1/photos:
+    post:
+      tags: [photos]
+      summary: Upload photo (auth required, JPEG, max 10MB, EXIF GPS required)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                caption: { type: string }
+                route_ids: { type: string, default: "[]" }
+      responses:
+        "201":
+          description: Photo uploaded
+        "400":
+          description: Validation error (e.g. no GPS)
+        "401":
+          description: Unauthorized
+
+  /v1/photos/{photo_id}:
+    parameters:
+      - name: photo_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [photos]
+      summary: Update photo caption/route associations (owner only)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                caption: { type: string }
+                route_ids: { type: array, items: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Photo updated
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Photo not found
+    delete:
+      tags: [photos]
+      summary: Delete photo (owner only)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "204":
+          description: Photo deleted
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Photo not found
+
+  /v1/photos/{photo_id}/image:
+    get:
+      tags: [photos]
+      summary: Get photo image (original or redirect to presigned URL)
+      parameters:
+        - name: photo_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: variant
+          in: query
+          schema: { type: string, enum: [original, thumbnail] }
+      responses:
+        "200":
+          description: Image content or redirect
+        "404":
+          description: Photo not found
+        "403":
+          description: Forbidden
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

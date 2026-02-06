@@ -1,0 +1,30 @@
+---
+description: Auth and OAuth patterns for Photowalker (Google OAuth, JWT, callback flow)
+globs: backend/app/auth/**/*.py,backend/app/api/v1/auth.py,frontend/src/**/auth*.ts,frontend/src/**/Auth*.tsx,frontend/src/hooks/useAuth.ts
+alwaysApply: false
+---
+
+# Auth & OAuth Doctrine
+
+## OAuth Redirect URI
+
+- `redirect_uri` in token exchange **must exactly match** the URI used in the authorization request.
+- Backend `GOOGLE_REDIRECT_URI` must equal frontend origin + callback path (e.g. `http://localhost:5173/auth/callback` for Vite dev).
+- Mismatch causes "Invalid or expired authorization code" even when code is fresh.
+
+## PyJWT + Google id_token
+
+- Use `pyjwt[crypto]` (not plain `pyjwt`) — RS256 verification requires `cryptography`.
+- `PyJWKSet` does NOT have `get_signing_key_from_jwt`. Use:
+  1. `jwt.get_unverified_header(id_token)` for `kid`
+  2. `jwks[kid]` to get the signing key
+  3. `jwt.decode(id_token, signing_key.key, ...)`
+- Fetch JWKS via httpx, not urllib — urllib can fail SSL on macOS.
+
+## Auth Callback Route
+
+- If the parent (e.g. App) gates rendering on `loading`, ensure callback path sets `loading=false` before returning, otherwise the callback route never mounts and code exchange never runs.
+
+## Dedupe Async Init
+
+- When using a shared promise to dedupe init (e.g. refresh on mount), do NOT clear the promise in `finally`. Clearing allows the next effect run to start a new init, causing a cascade of duplicate requests.

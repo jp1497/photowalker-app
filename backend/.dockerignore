@@ -1,0 +1,32 @@
+# Exclude from Docker build context
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.eggs/
+*.egg
+
+# Local dev artifacts
+local_uploads/
+*.log
+.env
+.env.*
+
+# Tests and dev tools (not needed in production image)
+tests/
+requirements-dev.txt
+pyproject.toml
+
+# Git and IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+*.md

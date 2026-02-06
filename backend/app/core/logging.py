@@ -13,3 +13,6 @@ def setup_logging(environment: str) -> None:
     logger = logging.getLogger()
     logger.setLevel(log_level)
     logger.addHandler(handler)
+    # Reduce boto/botocore noise in development (they log every request at DEBUG)
+    for name in ("boto3", "botocore", "urllib3"):
+        logging.getLogger(name).setLevel(logging.WARNING)
