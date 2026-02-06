@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class UserResponse(BaseModel):
@@ -17,4 +17,13 @@ class UserResponse(BaseModel):
     email: str
     name: str
     avatar_url: Optional[str] = None
+    default_map_lat: Optional[float] = None
+    default_map_lon: Optional[float] = None
     created_at: datetime
+
+
+class UserUpdate(BaseModel):
+    """Request body for PATCH /v1/auth/me (profile update)."""
+
+    default_map_lat: Optional[float] = None
+    default_map_lon: Optional[float] = None

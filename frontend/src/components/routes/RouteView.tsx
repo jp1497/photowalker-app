@@ -81,7 +81,7 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
     });
 
     const bounds = getBoundsFromCoords(coordinates);
-    map.fitBounds(bounds, { padding: 40, maxZoom: 14 });
+    map.fitBounds(bounds, { padding: 40, maxZoom: 14, duration: 0 });
 
     for (const photo of photos) {
       const coords = photo.location?.coordinates;

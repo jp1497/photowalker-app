@@ -1,6 +1,7 @@
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { AuthCallback } from './pages/AuthCallback';
+import { Browse } from './pages/Browse';
 import { CreateRoute } from './pages/CreateRoute';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
@@ -21,6 +22,9 @@ function App() {
         <Link to="/" style={{ marginRight: '1rem' }}>
           Home
         </Link>
+        <Link to="/browse" style={{ marginRight: '1rem' }}>
+          Browse
+        </Link>
         {isAuthenticated ? (
           <>
             <Link to="/routes/me" style={{ marginRight: '1rem' }}>
@@ -40,6 +44,7 @@ function App() {
       </nav>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/browse" element={<Browse />} />
         <Route path="/login" element={<Login />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/routes/me" element={<MyRoutes />} />

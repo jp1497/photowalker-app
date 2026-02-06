@@ -16,6 +16,8 @@ export interface MapViewProps {
 export function MapView({ center = DEFAULT_CENTER, zoom = DEFAULT_ZOOM, style, onMapReady }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const initialCenterRef = useRef(center);
+  const initialZoomRef = useRef(zoom);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -41,19 +43,28 @@ export function MapView({ center = DEFAULT_CENTER, zoom = DEFAULT_ZOOM, style, o
           },
         ],
       },
-      center,
-      zoom,
+      center: initialCenterRef.current,
+      zoom: initialZoomRef.current,
     });
     mapRef.current = map;
     map.on('load', () => {
       onMapReady?.(map);
     });
     return () => {
-      map.remove();
+      try {
+        map.remove();
+      } catch {
+        /* defensive teardown */
+      }
       mapRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- map created once; center/zoom are initial only
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.getCenter) return;
+    map.jumpTo({ center, zoom });
+  }, [center[0], center[1], zoom]);
 
   return <div ref={containerRef} className="map-container" style={{ width: '100%', height: '100%', ...style }} />;
 }

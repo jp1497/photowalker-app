@@ -4,6 +4,7 @@ import { MapView } from '../map/MapView';
 import { RouteDrawer } from '../map/RouteDrawer';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
+import { usePreferredMapCenter } from '../../hooks/usePreferredMapCenter';
 import { validateRouteGeometry } from '../../utils/geometry';
 import type { RouteCreatePayload } from '../../types/route';
 import type { Map } from 'maplibre-gl';
@@ -18,6 +19,7 @@ export interface RouteFormProps {
 }
 
 export function RouteForm({ onSubmit, isSubmitting = false }: RouteFormProps) {
+  const { center: mapCenter, zoom: mapZoom } = usePreferredMapCenter();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tagsInput, setTagsInput] = useState('');
@@ -106,6 +108,8 @@ export function RouteForm({ onSubmit, isSubmitting = false }: RouteFormProps) {
         )}
         <div style={{ height: 320, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden' }}>
           <MapView
+            center={mapCenter}
+            zoom={mapZoom}
             onMapReady={(map) => setMapInstance(map)}
             style={{ width: '100%', height: '100%' }}
           />

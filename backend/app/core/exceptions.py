@@ -18,4 +18,4 @@ class PhotoForbiddenError(Exception):
 
 
 class BboxTooLargeError(Exception):
-    """Requested bounding box area exceeds the maximum allowed (50 km²)."""
+    """Requested bounding box area exceeds the maximum allowed (200 km²)."""

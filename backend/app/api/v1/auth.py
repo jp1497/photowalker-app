@@ -17,7 +17,7 @@ from app.schemas.auth import (
     GoogleAuthRequest,
     LogoutResponse,
 )
-from app.schemas.user import UserResponse
+from app.schemas.user import UserResponse, UserUpdate
 from app.services.auth_service import (
     exchange_code_for_user,
     get_user_by_id,
@@ -128,4 +128,20 @@ async def auth_me(
     current_user: User = Depends(get_current_user_required),
 ) -> dict:
     """Return current authenticated user."""
+    return {"user": UserResponse.model_validate(current_user)}
+
+
+@router.patch("/me", response_model=AuthMeResponse)
+async def auth_me_update(
+    body: UserUpdate,
+    current_user: User = Depends(get_current_user_required),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Update current user profile (e.g. default map location)."""
+    if body.default_map_lat is not None:
+        current_user.default_map_lat = body.default_map_lat
+    if body.default_map_lon is not None:
+        current_user.default_map_lon = body.default_map_lon
+    await db.flush()
+    await db.refresh(current_user)
     return {"user": UserResponse.model_validate(current_user)}

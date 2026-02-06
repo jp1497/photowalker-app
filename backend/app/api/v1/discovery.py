@@ -75,7 +75,7 @@ async def browse_routes(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "code": "VALIDATION_ERROR",
-                "message": "Bounding box area exceeds maximum (50 km²)",
+                "message": "Bounding box area exceeds maximum (200 km²)",
                 "details": None,
             },
         )

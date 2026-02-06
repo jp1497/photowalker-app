@@ -15,7 +15,7 @@ from app.models.route_photo import RoutePhoto
 from app.models.route_tag import RouteTag
 from app.models.tag import Tag
 
-MAX_BBOX_AREA_M2 = 50_000_000  # 50 km² per PRD FR5
+MAX_BBOX_AREA_M2 = 200_000_000  # 200 km² (city-scale view)
 DEFAULT_PAGE = 1
 DEFAULT_PER_PAGE = 20
 MAX_PER_PAGE = 50
@@ -52,7 +52,7 @@ async def browse_routes(
 ) -> tuple[list[Route], int, int, int]:
     """Browse public routes with optional bbox, tags (AND), author, pagination and sort.
 
-    bbox: (min_lon, min_lat, max_lon, max_lat). Rejected if area > 50 km².
+    bbox: (min_lon, min_lat, max_lon, max_lat). Rejected if area > 200 km².
     tags: route must have all of these tags (AND).
     author_id: filter by route owner.
     page, per_page: pagination (per_page capped at MAX_PER_PAGE).

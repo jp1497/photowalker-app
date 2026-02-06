@@ -60,3 +60,17 @@ export async function getMe(): Promise<User> {
   const { data } = await apiClient.get<AuthMeResponse>('/v1/auth/me');
   return data.user;
 }
+
+/** Body for PATCH /v1/auth/me (update profile). */
+export interface UpdateMePayload {
+  default_map_lat?: number;
+  default_map_lon?: number;
+}
+
+/**
+ * Update current user profile (e.g. default map location). Requires valid access token.
+ */
+export async function updateMe(payload: UpdateMePayload): Promise<User> {
+  const { data } = await apiClient.patch<AuthMeResponse>('/v1/auth/me', payload);
+  return data.user;
+}

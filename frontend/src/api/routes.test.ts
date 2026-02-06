@@ -1,7 +1,7 @@
 /** Unit tests for routes API. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from './client';
-import { createRoute } from './routes';
+import { createRoute, getBrowseRoutes } from './routes';
 import type { RouteCreatePayload } from '../types/route';
 
 vi.mock('./client', () => ({
@@ -49,5 +49,20 @@ describe('routes API', () => {
 
     expect(apiClient.post).toHaveBeenCalledWith('/v1/routes', payload);
     expect(result.route).toEqual(route);
+  });
+
+  it('getBrowseRoutes sends GET /v1/routes with params', async () => {
+    const routes = [];
+    const pagination = { page: 1, per_page: 20, total: 0 };
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { routes, pagination } });
+
+    await getBrowseRoutes({ bbox: '-122.5,37.7,-122.3,37.9', page: 1, per_page: 20 });
+
+    expect(apiClient.get).toHaveBeenCalledWith('/v1/routes', {
+      params: { bbox: '-122.5,37.7,-122.3,37.9', page: 1, per_page: 20 },
+    });
+    const result = await getBrowseRoutes({ tags: 'urban', sort: 'created_at' });
+    expect(result.routes).toEqual(routes);
+    expect(result.pagination).toEqual(pagination);
   });
 });

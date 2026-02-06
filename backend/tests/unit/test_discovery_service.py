@@ -142,8 +142,8 @@ async def test_browse_routes_pagination(db_session: AsyncSession) -> None:
 @requires_postgres
 @pytest.mark.asyncio
 async def test_browse_routes_bbox_too_large_raises_error(db_session: AsyncSession) -> None:
-    """bbox larger than 50 km² raises BboxTooLargeError."""
-    # ~1 degree x 1 degree at mid-lat is ~10k+ km², well over 50 km²
+    """bbox larger than 200 km² raises BboxTooLargeError."""
+    # ~1 degree x 1 degree at mid-lat is ~10k+ km², well over 200 km²
     huge_bbox = (-122.5, 37.0, -121.5, 38.0)
     with pytest.raises(BboxTooLargeError):
         await discovery_service.browse_routes(db_session, bbox=huge_bbox)

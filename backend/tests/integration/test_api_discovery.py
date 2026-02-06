@@ -148,7 +148,7 @@ def test_get_v1_routes_with_tags_returns_routes_with_tag() -> None:
 
 @requires_postgres
 def test_get_v1_routes_bbox_too_large_returns_400() -> None:
-    """GET /v1/routes?bbox=... with area > 50 km² returns 400."""
+    """GET /v1/routes?bbox=... with area > 200 km² returns 400."""
     settings = _minimal_settings()
     app = create_app(settings)
     app.dependency_overrides[get_settings] = lambda: settings

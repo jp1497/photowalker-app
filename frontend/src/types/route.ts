@@ -52,3 +52,19 @@ export interface RouteDetailResponse {
   route: Route;
   photos: RouteDetailPhoto[];
 }
+
+/** GET /v1/routes (browse) query params */
+export interface BrowseParams {
+  bbox?: string;
+  tags?: string;
+  author_id?: string;
+  page?: number;
+  per_page?: number;
+  sort?: 'created_at' | 'distance';
+}
+
+/** GET /v1/routes (browse) response */
+export interface BrowseResponse {
+  routes: Route[];
+  pagination: { page: number; per_page: number; total: number };
+}

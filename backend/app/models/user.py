@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from sqlalchemy import String, Text
+from sqlalchemy import Float, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -27,6 +27,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     avatar_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    default_map_lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    default_map_lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -1,6 +1,12 @@
 /** Route API calls. */
 import { apiClient } from './client';
-import type { Route, RouteCreatePayload, RouteDetailResponse } from '../types/route';
+import type {
+  BrowseParams,
+  BrowseResponse,
+  Route,
+  RouteCreatePayload,
+  RouteDetailResponse,
+} from '../types/route';
 
 /** Response from GET /v1/routes/me */
 export interface MyRoutesResponse {
@@ -19,5 +25,11 @@ export async function createRoute(payload: RouteCreatePayload): Promise<{ route:
 
 export async function getRouteBySlug(slug: string): Promise<RouteDetailResponse> {
   const { data } = await apiClient.get<RouteDetailResponse>(`/v1/routes/${encodeURIComponent(slug)}`);
+  return data;
+}
+
+/** GET /v1/routes (browse public routes). No auth. */
+export async function getBrowseRoutes(params: BrowseParams = {}): Promise<BrowseResponse> {
+  const { data } = await apiClient.get<BrowseResponse>('/v1/routes', { params });
   return data;
 }

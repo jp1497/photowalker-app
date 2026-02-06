@@ -5,6 +5,8 @@ export interface User {
   email: string;
   name: string;
   avatar_url: string | null;
+  default_map_lat?: number | null;
+  default_map_lon?: number | null;
   created_at: string;
 }
 

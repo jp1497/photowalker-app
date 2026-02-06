@@ -4,6 +4,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RouteForm } from './RouteForm';
 
+vi.mock('../../hooks/usePreferredMapCenter', () => ({
+  usePreferredMapCenter: () => ({ center: [-122.42, 37.78], zoom: 12 }),
+}));
 vi.mock('../map/MapView', () => ({ MapView: () => <div data-testid="map-view" /> }));
 vi.mock('../map/RouteDrawer', () => ({ RouteDrawer: () => null }));
 
