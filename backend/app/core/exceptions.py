@@ -7,3 +7,11 @@ class RouteNotFoundError(Exception):
 
 class RouteForbiddenError(Exception):
     """User is not allowed to perform action on this route (e.g. not owner)."""
+
+
+class PhotoNotFoundError(Exception):
+    """Photo not found by id."""
+
+
+class PhotoForbiddenError(Exception):
+    """User is not allowed to perform action on this photo (e.g. not owner)."""
