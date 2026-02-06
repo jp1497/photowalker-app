@@ -2,12 +2,15 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getMyRoutes } from '../api/routes';
+import { Loading } from '../components/common/Loading';
 import type { Route } from '../types/route';
 
 export function MyRoutes() {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,17 +32,26 @@ export function MyRoutes() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [retryCount]);
 
   if (loading) {
-    return <p style={{ padding: '2rem', textAlign: 'center' }}>Loading your routes...</p>;
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <Loading label="Loading your routes..." />
+      </div>
+    );
   }
 
   if (error) {
     return (
       <div style={{ padding: '2rem' }}>
-        <p style={{ color: '#b91c1c' }}>{error}</p>
-        <Link to="/">Home</Link>
+        <p style={{ color: '#b91c1c', marginBottom: '1rem' }}>{error}</p>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => setRetryCount((c) => c + 1)}>
+            Retry
+          </button>
+          <Link to="/">Home</Link>
+        </div>
       </div>
     );
   }

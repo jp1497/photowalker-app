@@ -1,5 +1,8 @@
 /** Auth API: login (redirect to Google), callback (exchange code), refresh, logout, getMe. */
 import type { AuthGoogleResponse, AuthMeResponse, AuthRefreshResponse, User } from '../types/api';
+
+/** SessionStorage key for post-login redirect path. */
+export const REDIRECT_KEY = 'photowalker_redirect';
 import { apiClient } from './client';
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';

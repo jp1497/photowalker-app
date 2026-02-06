@@ -1,7 +1,18 @@
-/** Login page with Sign in with Google button. */
-import { login } from '../api/auth';
+/** Login page with Sign in with Google button. Stores redirect param for post-login navigation. */
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { login, REDIRECT_KEY } from '../api/auth';
 
 export function Login() {
+  const [searchParams] = useSearchParams();
+  const redirect = searchParams.get('redirect');
+
+  useEffect(() => {
+    if (redirect && redirect.startsWith('/')) {
+      sessionStorage.setItem(REDIRECT_KEY, redirect);
+    }
+  }, [redirect]);
+
   return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>
       <h1>Photowalker</h1>

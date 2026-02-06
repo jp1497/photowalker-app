@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authStore } from '../store/authStore';
-import { loginWithCode } from '../api/auth';
+import { loginWithCode, REDIRECT_KEY } from '../api/auth';
 
 export function AuthCallback() {
   const [searchParams] = useSearchParams();
@@ -18,7 +18,9 @@ export function AuthCallback() {
         authStore.getState().setAccessToken(access_token);
         authStore.getState().setUser(user);
         authStore.getState().setLoading(false);
-        navigate('/', { replace: true });
+        const redirect = sessionStorage.getItem(REDIRECT_KEY);
+        sessionStorage.removeItem(REDIRECT_KEY);
+        navigate(redirect && redirect.startsWith('/') ? redirect : '/', { replace: true });
       })
       .catch((err) => {
         setError(err.response?.data?.error?.message ?? 'Sign in failed');

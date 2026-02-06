@@ -1,6 +1,7 @@
 /** Axios instance: base URL, credentials, Bearer token, 401 interceptor. */
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { authStore } from '../store/authStore';
+import { toastStore } from '../store/toastStore';
 import { refresh } from './auth';
 
 // In dev, use relative URL so Vite proxy forwards to backend (same-origin = cookies work).
@@ -40,9 +41,9 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _skipToast?: boolean } | undefined;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (originalRequest && error.response?.status === 401 && !originalRequest._retry) {
       if (originalRequest.url?.includes('/v1/auth/refresh')) {
         return Promise.reject(error);
       }
@@ -74,6 +75,15 @@ apiClient.interceptors.response.use(
       }
     }
 
+    const status = error.response?.status;
+    const is5xx = status >= 500;
+    const isNetworkError = error.code === 'ERR_NETWORK' || error.message === 'Network Error';
+    if ((is5xx || isNetworkError) && !originalRequest?._skipToast) {
+      const msg = isNetworkError
+        ? 'Network error. Check your connection and try again.'
+        : 'Server error. Please try again.';
+      toastStore.getState().add(msg, 'error');
+    }
     return Promise.reject(error);
   }
 );

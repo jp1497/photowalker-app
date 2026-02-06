@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getRouteBySlug } from '../api/routes';
+import { Loading } from '../components/common/Loading';
 import { RouteView } from '../components/routes/RouteView';
 import { PhotoGallery } from '../components/photos/PhotoGallery';
 import { PhotoUploadForm } from '../components/photos/PhotoUploadForm';
@@ -16,6 +17,20 @@ export function RouteDetail() {
   const [error, setError] = useState<{ message: string; status?: number } | null>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
+
+  const retry = useCallback(() => {
+    if (!slug) return;
+    setError(null);
+    setLoading(true);
+    getRouteBySlug(slug)
+      .then(setData)
+      .catch((err) => {
+        const status = err.response?.status;
+        const msg = err.response?.data?.error?.message ?? (status === 404 ? 'Route not found' : status === 403 ? 'This route is private.' : 'Failed to load route.');
+        setError({ message: msg, status });
+      })
+      .finally(() => setLoading(false));
+  }, [slug]);
 
   const refetch = useCallback(() => {
     if (!slug) return;
@@ -57,17 +72,29 @@ export function RouteDetail() {
   }
 
   if (loading) {
-    return <p style={{ padding: '2rem', textAlign: 'center' }}>Loading route...</p>;
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <Loading label="Loading route..." />
+      </div>
+    );
   }
 
   if (error || !data) {
     const is404 = error?.status === 404;
     const is403 = error?.status === 403;
+    const canRetry = !is404 && !is403;
     return (
       <div style={{ padding: '2rem' }}>
         <h2 style={{ marginTop: 0 }}>{is404 ? 'Route not found' : is403 ? 'Private route' : 'Error'}</h2>
-        <p>{error?.message ?? 'Route not found'}</p>
-        <Link to="/">Home</Link>
+        <p style={{ marginBottom: '1rem' }}>{error?.message ?? 'Route not found'}</p>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {canRetry && (
+            <button type="button" onClick={retry}>
+              Retry
+            </button>
+          )}
+          <Link to="/">Home</Link>
+        </div>
       </div>
     );
   }

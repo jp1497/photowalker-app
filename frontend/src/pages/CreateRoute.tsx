@@ -1,13 +1,11 @@
-/** Create route page. Form + map, submit to POST /v1/routes, redirect on success. */
+/** Create route page. Form + map, submit to POST /v1/routes, redirect on success. Protected by ProtectedRoute. */
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 import { RouteForm } from '../components/routes/RouteForm';
 import { createRoute } from '../api/routes';
 import type { RouteCreatePayload } from '../types/route';
 
 export function CreateRoute() {
-  const { isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -27,19 +25,6 @@ export function CreateRoute() {
       setIsSubmitting(false);
     }
   };
-
-  if (authLoading) {
-    return <p style={{ padding: '2rem', textAlign: 'center' }}>Loading...</p>;
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div style={{ padding: '2rem' }}>
-        <p>You must be signed in to create a route.</p>
-        <Link to="/login">Sign in</Link>
-      </div>
-    );
-  }
 
   return (
     <div style={{ padding: '2rem' }}>

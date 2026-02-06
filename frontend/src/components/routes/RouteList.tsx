@@ -1,5 +1,6 @@
 /** Paginated list of routes for browse. Click route → navigate to detail. */
 import { useNavigate } from 'react-router-dom';
+import { Loading } from '../common/Loading';
 import type { Route } from '../../types/route';
 
 export interface RouteListProps {
@@ -33,7 +34,11 @@ export function RouteList({ routes, pagination, loading, onPageChange }: RouteLi
   };
 
   if (loading) {
-    return <p style={{ padding: '1rem', textAlign: 'center' }}>Loading routes...</p>;
+    return (
+      <div style={{ padding: '1rem', textAlign: 'center' }}>
+        <Loading label="Loading routes..." />
+      </div>
+    );
   }
 
   if (routes.length === 0) {
