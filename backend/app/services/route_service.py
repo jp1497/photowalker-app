@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import RouteForbiddenError, RouteNotFoundError
 from app.models.route import Route
+from app.models.route_photo import RoutePhoto
 from app.models.route_tag import RouteTag
 from app.models.tag import Tag
 from app.schemas.route import RouteCreate, RouteUpdate
@@ -91,7 +92,21 @@ async def create_route(db: AsyncSession, user_id: UUID, data: RouteCreate) -> Ro
 
 
 def _route_load_options():
-    return selectinload(Route.route_photos), selectinload(Route.route_tags).selectinload(RouteTag.tag)
+    return (
+        selectinload(Route.route_photos).selectinload(RoutePhoto.photo),
+        selectinload(Route.route_tags).selectinload(RouteTag.tag),
+    )
+
+
+async def get_routes_by_user(db: AsyncSession, user_id: UUID) -> list[Route]:
+    """Return all routes for a user, ordered by updated_at descending."""
+    r = await db.execute(
+        select(Route)
+        .where(Route.user_id == user_id)
+        .options(*_route_load_options())
+        .order_by(Route.updated_at.desc())
+    )
+    return list(r.scalars().all())
 
 
 async def get_route_by_slug(db: AsyncSession, slug: str) -> Route | None:

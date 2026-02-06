@@ -1,5 +1,5 @@
 /** Pin element for a photo location on the map. Used with maplibre Marker. */
-export function createPhotoMarkerElement(): HTMLElement {
+export function createPhotoMarkerElement(onClick?: () => void): HTMLElement {
   const el = document.createElement('div');
   el.className = 'photo-marker-pin';
   el.setAttribute('aria-hidden', 'true');
@@ -9,5 +9,11 @@ export function createPhotoMarkerElement(): HTMLElement {
     'box-shadow: 0 1px 4px rgba(0,0,0,0.3);',
     'cursor: pointer;',
   ].join(' ');
+  if (onClick) {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onClick();
+    });
+  }
   return el;
 }

@@ -49,6 +49,11 @@ class Settings(BaseSettings):
 
     model_config = {"env_file": ".env", "case_sensitive": False}
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        import logging
+        logging.getLogger("config").info("local_storage_path=%s", self.local_storage_path)
+
     @property
     def sync_database_url(self) -> str:
         """Database URL for sync drivers (e.g. psycopg2 in thumbnail worker)."""

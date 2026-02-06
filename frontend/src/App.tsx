@@ -4,6 +4,7 @@ import { AuthCallback } from './pages/AuthCallback';
 import { CreateRoute } from './pages/CreateRoute';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
+import { MyRoutes } from './pages/MyRoutes';
 import { RouteDetail } from './pages/RouteDetail';
 import './App.css';
 
@@ -22,6 +23,9 @@ function App() {
         </Link>
         {isAuthenticated ? (
           <>
+            <Link to="/routes/me" style={{ marginRight: '1rem' }}>
+              My routes
+            </Link>
             <Link to="/routes/create" style={{ marginRight: '1rem' }}>
               Create route
             </Link>
@@ -38,6 +42,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/routes/me" element={<MyRoutes />} />
         <Route path="/routes/create" element={<CreateRoute />} />
         <Route path="/routes/:slug" element={<RouteDetail />} />
       </Routes>

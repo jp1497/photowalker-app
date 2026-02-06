@@ -1,5 +1,5 @@
 ---
-description: Frontend Vite/ESM, third-party API usage, and map control teardown doctrine
+description: Frontend Vite/ESM, testing, types, third-party API usage, and map control teardown doctrine
 globs: frontend/**/*.ts,frontend/**/*.tsx
 alwaysApply: false
 ---
@@ -24,3 +24,15 @@ alwaysApply: false
 ## White Screen / No Visible Error
 
 - When the user reports a white page with no error message, the failure is often an uncaught exception that only appears in the console or is swallowed by the framework. **Immediately add:** (1) a root error boundary that catches render errors and displays them on the page, and (2) bootstrap-level handling (e.g. try/catch around createRoot/render, or onUncaughtError) so the real error is shown in the UI. Then reproduce; the next failure will be visible and debuggable.
+
+## Testing: Match Project Assertion Style and Setup
+
+- Before adding tests, verify the project's test runner, matchers, and setup (e.g. Vitest without jest-dom). Use the same assertion style as existing tests in the same codebase (e.g. `expect(el).toBeTruthy()` rather than `expect(el).toBeInTheDocument()` if jest-dom is not configured). Replicating existing patterns avoids failures from missing or different matchers.
+
+## Testing: Queries When Text Appears in Multiple Nodes
+
+- When asserting on text that may be duplicated in the DOM (e.g. a caption rendered inside a mock and again as visible caption text), avoid `getByText` if it can match multiple nodes. Prefer `getAllByText` and assert on length, or scope the query with `within(container)`, or query by test id/role to target a single node.
+
+## Types: API Response and Minimal Component Props
+
+- Keep frontend API response types complete relative to the backend schema (all fields the API returns). For components that only need a subset of fields, define a minimal interface as the component's prop type (e.g. `{ id; caption }`) so that both full response types and partial shapes are assignable; this avoids incomplete response types and keeps the backend as the source of truth.

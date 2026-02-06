@@ -47,6 +47,18 @@ async def create_route(
     return {"route": RouteResponse.model_validate(route).model_dump(mode="json", by_alias=True)}
 
 
+@router.get("/me")
+async def get_my_routes(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_required),
+) -> dict:
+    """Get current user's routes. Auth required."""
+    routes = await route_service.get_routes_by_user(db, current_user.id)
+    return {
+        "routes": [RouteResponse.model_validate(r).model_dump(mode="json", by_alias=True) for r in routes],
+    }
+
+
 @router.get("/{route_id}/photos")
 async def get_route_photos(
     route_id: UUID,

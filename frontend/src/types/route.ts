@@ -33,16 +33,22 @@ export interface Route {
   tags: string[];
 }
 
+/** Photo as returned in route detail (same shape as Photo). */
+export interface RouteDetailPhoto {
+  id: string;
+  user_id: string;
+  caption: string | null;
+  location: { type: string; coordinates: number[] };
+  s3_key_original: string;
+  s3_key_thumbnail: string | null;
+  file_size_bytes: number;
+  captured_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** GET /v1/routes/{slug} response */
 export interface RouteDetailResponse {
   route: Route;
-  photos: Array<{
-    id: string;
-    caption: string | null;
-    location: { type: string; coordinates: number[] };
-    s3_key_original: string;
-    s3_key_thumbnail: string | null;
-    captured_at: string | null;
-    created_at: string;
-  }>;
+  photos: RouteDetailPhoto[];
 }

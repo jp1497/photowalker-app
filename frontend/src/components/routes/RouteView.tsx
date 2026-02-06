@@ -18,6 +18,10 @@ export interface RoutePhoto {
 export interface RouteViewProps {
   route: Route;
   photos: RoutePhoto[];
+  /** Highlight this photo pin on the map. */
+  selectedPhotoId?: string | null;
+  /** Called when a photo pin is clicked. */
+  onSelectPhoto?: (photoId: string) => void;
 }
 
 const ROUTE_SOURCE_ID = 'route-line';
@@ -40,13 +44,16 @@ function getBoundsFromCoords(coords: [number, number][]): [[number, number], [nu
   return [[minLng - pad, minLat - pad], [maxLng + pad, maxLat + pad]];
 }
 
-export function RouteView({ route, photos }: RouteViewProps) {
+export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: RouteViewProps) {
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const photoIdsRef = useRef<string[]>([]);
 
   const coordinates = route.route_geometry?.coordinates ?? [];
   const hasRoute = coordinates.length >= 2;
 
   const handleMapReady = (map: maplibregl.Map) => {
+    photoIdsRef.current = [];
+    markersRef.current = [];
     if (!hasRoute) return;
 
     const geojson: GeoJSON.Feature<GeoJSON.LineString> = {
@@ -80,15 +87,28 @@ export function RouteView({ route, photos }: RouteViewProps) {
       const coords = photo.location?.coordinates;
       if (!coords || coords.length < 2) continue;
       const [lng, lat] = coords;
-      const el = createPhotoMarkerElement();
+      const el = createPhotoMarkerElement(() => onSelectPhoto?.(photo.id));
       const marker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
       markersRef.current.push(marker);
+      photoIdsRef.current.push(photo.id);
     }
   };
 
   useEffect(() => {
+    const ids = photoIdsRef.current;
+    markersRef.current.forEach((marker, i) => {
+      const el = marker.getElement();
+      if (!el) return;
+      const isSelected = ids[i] === selectedPhotoId;
+      el.style.background = isSelected ? '#1d4ed8' : '#2563eb';
+      el.style.transform = isSelected ? 'scale(1.2)' : 'none';
+    });
+  }, [selectedPhotoId]);
+
+  useEffect(() => {
     return () => {
       markersRef.current = [];
+      photoIdsRef.current = [];
     };
   }, []);
 

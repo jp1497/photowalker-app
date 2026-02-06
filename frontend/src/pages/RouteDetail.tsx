@@ -1,15 +1,26 @@
 /** Route detail page. Fetch by slug, display map + gallery + metadata. */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getRouteBySlug } from '../api/routes';
 import { RouteView } from '../components/routes/RouteView';
+import { PhotoGallery } from '../components/photos/PhotoGallery';
+import { PhotoUploadForm } from '../components/photos/PhotoUploadForm';
+import { useAuth } from '../hooks/useAuth';
 import type { RouteDetailResponse } from '../types/route';
 
 export function RouteDetail() {
   const { slug } = useParams<{ slug: string }>();
+  const { user, isAuthenticated } = useAuth();
   const [data, setData] = useState<RouteDetailResponse | null>(null);
   const [loading, setLoading] = useState(!!slug);
   const [error, setError] = useState<{ message: string; status?: number } | null>(null);
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
+
+  const refetch = useCallback(() => {
+    if (!slug) return;
+    getRouteBySlug(slug).then(setData);
+  }, [slug]);
 
   useEffect(() => {
     if (!slug) return;
@@ -62,40 +73,48 @@ export function RouteDetail() {
   }
 
   const { route, photos } = data;
+  const isOwner = isAuthenticated && user?.id === route.user_id;
 
   return (
     <div style={{ padding: '2rem' }}>
       <p style={{ marginBottom: '1rem' }}>
         <Link to="/">Home</Link> / <Link to="/routes/create">Create route</Link>
       </p>
-      <RouteView route={route} photos={photos} />
+      <RouteView
+        route={route}
+        photos={photos}
+        selectedPhotoId={selectedPhotoId}
+        onSelectPhoto={setSelectedPhotoId}
+      />
       <section style={{ marginTop: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Photos</h2>
-        {photos.length === 0 ? (
-          <p style={{ color: '#666' }}>No photos yet.</p>
-        ) : (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-            {photos.map((photo) => (
-              <li key={photo.id} style={{ width: 120 }}>
-                <div
-                  style={{
-                    aspectRatio: '1',
-                    background: '#eee',
-                    borderRadius: 4,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.75rem',
-                    color: '#666',
-                  }}
-                >
-                  Photo
-                </div>
-                {photo.caption && <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem' }}>{photo.caption}</p>}
-              </li>
-            ))}
-          </ul>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+          <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Photos</h2>
+          {isOwner && (
+            <button
+              type="button"
+              onClick={() => setShowUpload((v) => !v)}
+              style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem', cursor: 'pointer' }}
+            >
+              {showUpload ? 'Cancel' : 'Add photos'}
+            </button>
+          )}
+        </div>
+        {showUpload && isOwner && (
+          <div style={{ marginBottom: '1rem', padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+            <PhotoUploadForm
+              routeIds={[route.id]}
+              onSuccess={() => {
+                refetch();
+                setShowUpload(false);
+              }}
+            />
+          </div>
         )}
+        <PhotoGallery
+          photos={photos}
+          selectedPhotoId={selectedPhotoId}
+          onSelectPhoto={setSelectedPhotoId}
+        />
       </section>
     </div>
   );

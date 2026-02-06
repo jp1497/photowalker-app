@@ -113,6 +113,16 @@ async def get_photo_by_id(db: AsyncSession, photo_id: UUID) -> Optional[Photo]:
     return r.scalar_one_or_none()
 
 
+async def get_photo_by_id_with_routes(db: AsyncSession, photo_id: UUID) -> Optional[Photo]:
+    """Return photo by id with route_photos and route loaded (for access check)."""
+    r = await db.execute(
+        select(Photo)
+        .where(Photo.id == photo_id)
+        .options(selectinload(Photo.route_photos).selectinload(RoutePhoto.route))
+    )
+    return r.scalar_one_or_none()
+
+
 async def update_photo(
     db: AsyncSession,
     photo_id: UUID,

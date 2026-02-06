@@ -83,6 +83,43 @@ def test_post_routes_creates_route_returns_201() -> None:
 
 
 @requires_postgres
+def test_get_routes_me_returns_user_routes() -> None:
+    """GET /v1/routes/me returns current user's routes."""
+    settings = _minimal_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        user, token = _create_user_and_token_sync(settings)
+        with TestClient(app) as client:
+            create_resp = client.post(
+                "/v1/routes",
+                headers={"Authorization": f"Bearer {token}"},
+                json=_valid_route_payload(),
+            )
+            assert create_resp.status_code == 201
+            me_resp = client.get("/v1/routes/me", headers={"Authorization": f"Bearer {token}"})
+        assert me_resp.status_code == 200
+        data = me_resp.json()
+        assert "routes" in data
+        routes = data["routes"]
+        assert len(routes) == 1
+        assert routes[0]["title"] == "Test Walk"
+        assert routes[0]["user_id"] == str(user.id)
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_get_routes_me_without_auth_returns_401() -> None:
+    """GET /v1/routes/me without auth returns 401."""
+    settings = _minimal_settings()
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.get("/v1/routes/me")
+    assert response.status_code == 401
+
+
+@requires_postgres
 def test_post_routes_without_auth_returns_401() -> None:
     """POST /v1/routes without auth returns 401."""
     settings = _minimal_settings()
