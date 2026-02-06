@@ -81,7 +81,10 @@ async def browse_routes(
         if area_m2 > MAX_BBOX_AREA_M2:
             raise BboxTooLargeError()
 
-    base = select(Route).where(Route.is_public.is_(True))
+    base = select(Route).where(
+        Route.is_public.is_(True),
+        Route.is_draft.is_(False),
+    )
 
     if author_id is not None:
         base = base.where(Route.user_id == author_id)
@@ -103,7 +106,10 @@ async def browse_routes(
         base = base.where(Route.id.in_(tag_subq))
 
     # Count total (same filters, no order/limit)
-    count_stmt = select(func.count(Route.id)).where(Route.is_public.is_(True))
+    count_stmt = select(func.count(Route.id)).where(
+        Route.is_public.is_(True),
+        Route.is_draft.is_(False),
+    )
     if author_id is not None:
         count_stmt = count_stmt.where(Route.user_id == author_id)
     if bbox is not None:

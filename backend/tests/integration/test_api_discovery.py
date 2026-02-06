@@ -65,15 +65,17 @@ def test_get_v1_routes_browse_returns_routes_and_pagination() -> None:
     settings = _minimal_settings()
     app = create_app(settings)
     app.dependency_overrides[get_settings] = lambda: settings
+    slug = f"browse-route-{uuid4().hex[:8]}"
     try:
         user, token = _create_user_and_token_sync(settings)
         with TestClient(app) as client:
-            client.post(
+            resp = client.post(
                 "/v1/routes",
                 headers={"Authorization": f"Bearer {token}"},
-                json=_public_route_payload(),
+                json=_public_route_payload(slug=slug),
             )
-            response = client.get("/v1/routes")
+            assert resp.status_code in (200, 201)
+            response = client.get(f"/v1/routes?author_id={user.id}")
         assert response.status_code == 200
         data = response.json()
         assert "routes" in data
@@ -87,7 +89,7 @@ def test_get_v1_routes_browse_returns_routes_and_pagination() -> None:
         assert pagination["total"] >= 1
         routes = data["routes"]
         assert len(routes) >= 1
-        route = next((r for r in routes if r.get("slug") == "browse-route"), None)
+        route = next((r for r in routes if r.get("slug") == slug), None)
         assert route is not None
         assert route["is_public"] is True
     finally:
@@ -100,22 +102,26 @@ def test_get_v1_routes_with_bbox_returns_routes_in_area() -> None:
     settings = _minimal_settings()
     app = create_app(settings)
     app.dependency_overrides[get_settings] = lambda: settings
+    slug = f"inside-bbox-{uuid4().hex[:8]}"
     try:
         user, token = _create_user_and_token_sync(settings)
         with TestClient(app) as client:
-            client.post(
+            resp = client.post(
                 "/v1/routes",
                 headers={"Authorization": f"Bearer {token}"},
-                json=_public_route_payload(slug="inside-bbox"),
+                json=_public_route_payload(slug=slug),
             )
+            assert resp.status_code in (200, 201)
             # Bbox ~20 km² that contains the route at (-122.4,37.8)-(-122.38,37.82)
-            response = client.get("/v1/routes?bbox=-122.42,37.78,-122.38,37.84")
+            response = client.get(
+                f"/v1/routes?bbox=-122.42,37.78,-122.38,37.84&author_id={user.id}"
+            )
         assert response.status_code == 200
         data = response.json()
         routes = data["routes"]
         assert data["pagination"]["total"] >= 1
         slugs = [r["slug"] for r in routes]
-        assert "inside-bbox" in slugs
+        assert slug in slugs
     finally:
         app.dependency_overrides.pop(get_settings, None)
 
@@ -126,22 +132,24 @@ def test_get_v1_routes_with_tags_returns_routes_with_tag() -> None:
     settings = _minimal_settings()
     app = create_app(settings)
     app.dependency_overrides[get_settings] = lambda: settings
+    slug = f"urban-route-{uuid4().hex[:8]}"
     try:
         user, token = _create_user_and_token_sync(settings)
         with TestClient(app) as client:
-            client.post(
+            resp = client.post(
                 "/v1/routes",
                 headers={"Authorization": f"Bearer {token}"},
-                json=_public_route_payload(slug="urban-route", tags=["urban"]),
+                json=_public_route_payload(slug=slug, tags=["urban"]),
             )
-            response = client.get("/v1/routes?tags=urban")
+            assert resp.status_code in (200, 201)
+            response = client.get(f"/v1/routes?tags=urban&author_id={user.id}")
         assert response.status_code == 200
         data = response.json()
         routes = data["routes"]
         assert data["pagination"]["total"] >= 1
         urban_routes = [r for r in routes if "urban" in (r.get("tags") or [])]
         assert len(urban_routes) >= 1
-        assert any(r["slug"] == "urban-route" for r in urban_routes)
+        assert any(r["slug"] == slug for r in urban_routes)
     finally:
         app.dependency_overrides.pop(get_settings, None)
 
