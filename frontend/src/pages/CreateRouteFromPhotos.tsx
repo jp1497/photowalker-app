@@ -7,8 +7,8 @@ import { MapPicker } from '../components/map/MapPicker';
 import { createPhotoMarkerElement } from '../components/map/PhotoMarker';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
-import { uploadPhoto, updatePhoto } from '../api/photos';
-import { PhotoImage } from '../components/photos/PhotoImage';
+import { uploadPhoto, updatePhoto, getPhotoImageUrl } from '../api/photos';
+import { apiClient } from '../api/client';
 import { createRouteFromPhotos } from '../api/routes';
 import { usePreferredMapCenter } from '../hooks/usePreferredMapCenter';
 import type { Photo } from '../types/photo';
@@ -41,6 +41,44 @@ function getBoundsFromCoords(coords: [number, number][]): [[number, number], [nu
   return [[minLng - pad, minLat - pad], [maxLng + pad, maxLat + pad]];
 }
 
+/** Fetches thumbnail (with auth), creates object URL, reports to parent. Parent owns URL so it survives reorder. */
+function ThumbnailLoader({
+  photoId,
+  onLoaded,
+  style,
+}: {
+  photoId: string;
+  onLoaded: (photoId: string, url: string) => void;
+  style: React.CSSProperties;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const opts = { responseType: 'blob' as const, signal: controller.signal };
+    const attach = (res: { data: Blob }) => {
+      const objectUrl = URL.createObjectURL(res.data);
+      setUrl(objectUrl);
+      onLoaded(photoId, objectUrl);
+    };
+    apiClient
+      .get(getPhotoImageUrl(photoId, 'thumbnail'), opts)
+      .then(attach)
+      .catch(() => apiClient.get(getPhotoImageUrl(photoId, 'original'), opts).then(attach))
+      .catch(() => setUrl(null));
+    return () => controller.abort();
+  }, [photoId, onLoaded]);
+
+  if (!url) {
+    return (
+      <div style={{ ...style, background: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: '0.75rem' }}>
+        Loading…
+      </div>
+    );
+  }
+  return <img src={url} alt="" style={style} />;
+}
+
 export function CreateRouteFromPhotos() {
   const navigate = useNavigate();
   const { center: mapCenter } = usePreferredMapCenter();
@@ -58,8 +96,15 @@ export function CreateRouteFromPhotos() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
+  const thumbnailUrlsRef = useRef<Record<string, string>>({});
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  thumbnailUrlsRef.current = thumbnailUrls;
+
+  const handleThumbnailLoaded = useCallback((photoId: string, url: string) => {
+    setThumbnailUrls((prev) => ({ ...prev, [photoId]: url }));
+  }, []);
 
   const tags = tagsInput
     .split(',')
@@ -139,6 +184,13 @@ export function CreateRouteFromPhotos() {
   const handleDragEnd = () => setDraggedIndex(null);
 
   const removePhoto = useCallback((photoId: string) => {
+    setThumbnailUrls((prev) => {
+      const url = prev[photoId];
+      if (url) URL.revokeObjectURL(url);
+      const next = { ...prev };
+      delete next[photoId];
+      return next;
+    });
     setPhotos((prev) => prev.filter((p) => p.id !== photoId));
     if (photoToPlace?.id === photoId) setPhotoToPlace(null);
   }, [photoToPlace?.id]);
@@ -207,6 +259,12 @@ export function CreateRouteFromPhotos() {
     return () => {
       markersRef.current = [];
       mapRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      Object.values(thumbnailUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
 
@@ -326,12 +384,19 @@ export function CreateRouteFromPhotos() {
                     }}
                   >
                     <span style={{ fontWeight: 500, minWidth: '1.5rem' }}>{index + 1}</span>
-                    <PhotoImage
-                      photoId={photo.id}
-                      size="thumbnail"
-                      alt=""
-                      style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }}
-                    />
+                    {thumbnailUrls[photo.id] ? (
+                      <img
+                        src={thumbnailUrls[photo.id]}
+                        alt=""
+                        style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }}
+                      />
+                    ) : (
+                      <ThumbnailLoader
+                        photoId={photo.id}
+                        onLoaded={handleThumbnailLoaded}
+                        style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }}
+                      />
+                    )}
                     <span style={{ flex: 1, fontSize: '0.875rem' }}>
                       {photo.caption || (hasLoc ? 'Has location' : 'No location')}
                     </span>
