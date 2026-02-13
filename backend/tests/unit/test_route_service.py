@@ -202,8 +202,9 @@ async def test_create_route_from_photos_builds_linestring_from_photo_order(
     assert route.route_photos[1].display_order == 1
     geom = mapping(to_shape(route.route_geometry))
     assert geom["type"] == "LineString"
-    assert geom["coordinates"][0] == [-122.4, 37.8]
-    assert geom["coordinates"][1] == [-122.41, 37.81]
+    # Shapely mapping() returns coordinates as tuples
+    assert list(geom["coordinates"][0]) == [-122.4, 37.8]
+    assert list(geom["coordinates"][1]) == [-122.41, 37.81]
 
 
 @requires_postgres
@@ -253,7 +254,8 @@ async def test_create_route_from_photos_rejects_when_fewer_than_two_photos(
     p1 = _photo_with_location(user.id, -122.4, 37.8, "user/p1.jpg")
     db_session.add(p1)
     await db_session.flush()
-    data = RouteFromPhotosCreate(
+    # Use model_construct to bypass Pydantic min_length=2 so we test service validation
+    data = RouteFromPhotosCreate.model_construct(
         title="From Photos",
         description=None,
         tags=[],
