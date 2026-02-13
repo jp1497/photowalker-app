@@ -8,7 +8,7 @@ import type { Route } from '../../types/route';
 export interface RoutePhoto {
   id: string;
   caption: string | null;
-  location: { type: string; coordinates: number[] };
+  location: { type: string; coordinates: number[] } | null;
   s3_key_original: string;
   s3_key_thumbnail: string | null;
   captured_at: string | null;

@@ -6,6 +6,7 @@ import { RouteDetail } from './RouteDetail';
 import * as routesApi from '../api/routes';
 
 vi.mock('../components/routes/RouteView', () => ({ RouteView: ({ route }: { route: { title: string } }) => <div data-testid="route-view">{route.title}</div> }));
+vi.mock('../components/map/MapPicker', () => ({ MapPicker: () => null }));
 vi.mock('../api/routes');
 
 describe('RouteDetail', () => {

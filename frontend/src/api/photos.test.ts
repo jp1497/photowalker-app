@@ -1,12 +1,13 @@
 /** Unit tests for photos API. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from './client';
-import { uploadPhoto, getPhotoImageUrl, getRoutePhotos } from './photos';
+import { uploadPhoto, getPhotoImageUrl, getRoutePhotos, updatePhoto } from './photos';
 
 vi.mock('./client', () => ({
   apiClient: {
     post: vi.fn(),
     get: vi.fn(),
+    patch: vi.fn(),
   },
 }));
 
@@ -61,5 +62,17 @@ describe('photos API', () => {
       '/v1/routes/route-id/photos',
       { params: { order: 'captured_at' } }
     );
+  });
+
+  it('updatePhoto sends PATCH with location', async () => {
+    const photoId = 'photo-123';
+    const location = { type: 'Point' as const, coordinates: [-122.42, 37.78] as [number, number] };
+    const updated = { id: photoId, user_id: 'u1', caption: null, location, s3_key_original: '', s3_key_thumbnail: null, file_size_bytes: 1, captured_at: null, created_at: '', updated_at: '' };
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: updated });
+
+    const result = await updatePhoto(photoId, { location });
+
+    expect(result.location).toEqual(location);
+    expect(apiClient.patch).toHaveBeenCalledWith('/v1/photos/photo-123', { location });
   });
 });

@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import Settings
 from app.core.exceptions import PhotoForbiddenError, PhotoNotFoundError
 from app.models.photo import Photo
+from app.models.route import Route
 from app.models.route_photo import RoutePhoto
 from app.storage.s3 import delete_file, photo_original_key, upload_file
 from app.utils.exif import MAX_PHOTO_BYTES, extract_captured_at, extract_gps
@@ -153,6 +154,17 @@ async def update_photo(
         photo.caption = caption.strip()[:CAPTION_MAX_LEN] or None
 
     if route_ids is not None:
+        # Validate all route_ids exist and belong to user before touching route_photos
+        if route_ids:
+            r = await db.execute(
+                select(Route.id).where(Route.id.in_(route_ids), Route.user_id == user_id)
+            )
+            found_ids = {row[0] for row in r.scalars().all()}
+            missing = [rid for rid in route_ids if rid not in found_ids]
+            if missing:
+                raise ValueError(
+                    "One or more route IDs not found or you do not have access to them"
+                )
         for rid in route_ids:
             count_result = await db.execute(
                 select(func.count()).select_from(RoutePhoto).where(RoutePhoto.route_id == rid)
