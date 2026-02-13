@@ -293,3 +293,84 @@ async def test_create_route_from_photos_rejects_when_user_does_not_own_photo(
     )
     with pytest.raises(ValueError, match="not owned"):
         await route_service.create_route_from_photos(db_session, other.id, data)
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_recompute_route_geometry_from_photos_updates_geometry_from_photo_order(
+    db_session: AsyncSession,
+) -> None:
+    """recompute_route_geometry_from_photos rebuilds geometry from route_photos display_order."""
+    user = User(google_id="g20", email="u20@example.com", name="User Twenty")
+    db_session.add(user)
+    await db_session.flush()
+    p1 = _photo_with_location(user.id, -122.4, 37.8, "user/p1.jpg")
+    p2 = _photo_with_location(user.id, -122.41, 37.81, "user/p2.jpg")
+    db_session.add(p1)
+    db_session.add(p2)
+    await db_session.flush()
+    data = RouteFromPhotosCreate(
+        title="Recompute Test",
+        description=None,
+        tags=[],
+        is_public=False,
+        photo_ids=[p1.id, p2.id],
+        slug=None,
+    )
+    route = await route_service.create_route_from_photos(db_session, user.id, data)
+    # Swap display_order so p2 comes first
+    rp0, rp1 = route.route_photos[0], route.route_photos[1]
+    rp0.display_order, rp1.display_order = 1, 0
+    await db_session.flush()
+    updated = await route_service.recompute_route_geometry_from_photos(db_session, route.id)
+    assert updated is not None
+    geom = mapping(to_shape(updated.route_geometry))
+    assert geom["type"] == "LineString"
+    assert list(geom["coordinates"][0]) == [-122.41, 37.81]
+    assert list(geom["coordinates"][1]) == [-122.4, 37.8]
+    assert updated.distance_meters > 0
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_recompute_route_geometry_from_photos_with_one_photo_handles_gracefully(
+    db_session: AsyncSession,
+) -> None:
+    """recompute with 1 photo with location sets degenerate LineString, distance 0."""
+    user = User(google_id="g21", email="u21@example.com", name="User Twenty-One")
+    db_session.add(user)
+    await db_session.flush()
+    p1 = _photo_with_location(user.id, -122.4, 37.8, "user/p1.jpg")
+    p2 = _photo_with_location(user.id, -122.41, 37.81, "user/p2.jpg")
+    db_session.add(p1)
+    db_session.add(p2)
+    await db_session.flush()
+    data = RouteFromPhotosCreate(
+        title="One Photo Left",
+        description=None,
+        tags=[],
+        is_public=False,
+        photo_ids=[p1.id, p2.id],
+        slug=None,
+    )
+    route = await route_service.create_route_from_photos(db_session, user.id, data)
+    # Remove one route_photo so only one remains
+    await db_session.delete(route.route_photos[1])
+    await db_session.flush()
+    updated = await route_service.recompute_route_geometry_from_photos(db_session, route.id)
+    assert updated is not None
+    assert updated.distance_meters == 0.0
+    geom = mapping(to_shape(updated.route_geometry))
+    assert geom["type"] == "LineString"
+    assert len(geom["coordinates"]) == 2
+    assert list(geom["coordinates"][0]) == list(geom["coordinates"][1]) == [-122.4, 37.8]
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_recompute_route_geometry_from_photos_returns_none_for_invalid_route_id(
+    db_session: AsyncSession,
+) -> None:
+    """recompute_route_geometry_from_photos returns None when route does not exist."""
+    result = await route_service.recompute_route_geometry_from_photos(db_session, uuid4())
+    assert result is None

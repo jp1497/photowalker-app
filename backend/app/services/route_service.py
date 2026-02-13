@@ -6,6 +6,7 @@ from uuid import UUID
 from geoalchemy2.elements import WKTElement
 from geoalchemy2.shape import to_shape
 from shapely import wkt
+from shapely.geometry import LineString
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -246,3 +247,43 @@ async def delete_route(db: AsyncSession, route_id: UUID, user_id: UUID) -> None:
         raise RouteForbiddenError()
     await db.delete(route)
     await db.flush()
+
+
+async def recompute_route_geometry_from_photos(db: AsyncSession, route_id: UUID) -> Route | None:
+    """Recompute route geometry from photo locations in display_order. PRD v3 - FR-R2.
+
+    Fetches route_photos ordered by display_order, builds LineString from photo locations,
+    updates route.route_geometry and route.distance_meters. Call after add/remove/reorder photos.
+    Returns the route with updated geometry, or None if route not found.
+    If fewer than 2 photos have location: sets geometry to degenerate (single point duplicated)
+    so distance=0; if zero photos with location, skips update and returns route unchanged.
+    """
+    route = await get_route_by_id(db, route_id)
+    if route is None:
+        return None
+    # Query route_photos ordered by display_order so we use current DB order (not cached)
+    r = await db.execute(
+        select(RoutePhoto)
+        .where(RoutePhoto.route_id == route_id)
+        .order_by(RoutePhoto.display_order)
+        .options(selectinload(RoutePhoto.photo))
+    )
+    ordered_route_photos = list(r.scalars().all())
+    coords: list[list[float]] = []
+    for rp in ordered_route_photos:
+        if rp.photo.location is not None:
+            point = to_shape(rp.photo.location)
+            coords.append([float(point.x), float(point.y)])
+    if len(coords) == 0:
+        return route
+    if len(coords) == 1:
+        line = LineString([coords[0], coords[0]])
+        dist = 0.0
+    else:
+        line = validate_linestring(coords)
+        dist = distance_meters(line)
+    route.route_geometry = WKTElement(wkt.dumps(line), srid=4326)
+    route.distance_meters = dist
+    await db.flush()
+    await db.refresh(route)
+    return route
