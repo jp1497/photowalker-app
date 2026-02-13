@@ -18,6 +18,16 @@ export interface RouteCreatePayload {
   is_public: boolean;
 }
 
+/** Payload for POST /v1/routes/from-photos (PRD v3 FR-R1) */
+export interface RouteFromPhotosPayload {
+  title: string;
+  description?: string | null;
+  tags: string[];
+  is_public: boolean;
+  photo_ids: string[];
+  slug?: string | null;
+}
+
 /** Route from API (route detail and list) */
 export interface Route {
   id: string;

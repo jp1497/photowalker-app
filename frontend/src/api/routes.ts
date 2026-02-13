@@ -6,6 +6,7 @@ import type {
   Route,
   RouteCreatePayload,
   RouteDetailResponse,
+  RouteFromPhotosPayload,
 } from '../types/route';
 
 /** Response from GET /v1/routes/me */
@@ -20,6 +21,12 @@ export async function getMyRoutes(): Promise<MyRoutesResponse> {
 
 export async function createRoute(payload: RouteCreatePayload): Promise<{ route: Route }> {
   const { data } = await apiClient.post<{ route: Route }>('/v1/routes', payload);
+  return data;
+}
+
+/** Create route from ordered photo IDs. PRD v3 - POST /v1/routes/from-photos. */
+export async function createRouteFromPhotos(payload: RouteFromPhotosPayload): Promise<{ route: Route }> {
+  const { data } = await apiClient.post<{ route: Route }>('/v1/routes/from-photos', payload);
   return data;
 }
 

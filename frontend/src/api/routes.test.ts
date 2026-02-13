@@ -1,8 +1,8 @@
 /** Unit tests for routes API. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from './client';
-import { createRoute, getBrowseRoutes } from './routes';
-import type { RouteCreatePayload } from '../types/route';
+import { createRoute, createRouteFromPhotos, getBrowseRoutes } from './routes';
+import type { RouteCreatePayload, RouteFromPhotosPayload } from '../types/route';
 
 vi.mock('./client', () => ({
   apiClient: {
@@ -49,6 +49,36 @@ describe('routes API', () => {
 
     expect(apiClient.post).toHaveBeenCalledWith('/v1/routes', payload);
     expect(result.route).toEqual(route);
+  });
+
+  it('createRouteFromPhotos sends POST /v1/routes/from-photos with photo_ids in order', async () => {
+    const payload: RouteFromPhotosPayload = {
+      title: 'From Photos',
+      description: null,
+      tags: [],
+      is_public: false,
+      photo_ids: ['photo-a', 'photo-b', 'photo-c'],
+    };
+    const route = {
+      id: 'route-1',
+      user_id: 'user-1',
+      slug: 'from-photos-xyz',
+      title: payload.title,
+      description: payload.description,
+      route_geometry: { type: 'LineString', coordinates: [] },
+      distance_meters: 500,
+      is_public: false,
+      created_at: '',
+      updated_at: '',
+      tags: [],
+    };
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { route } });
+
+    const result = await createRouteFromPhotos(payload);
+
+    expect(apiClient.post).toHaveBeenCalledWith('/v1/routes/from-photos', payload);
+    expect(result.route.photo_ids).toBeUndefined();
+    expect(result.route.slug).toBe('from-photos-xyz');
   });
 
   it('getBrowseRoutes sends GET /v1/routes with params', async () => {
