@@ -7,7 +7,8 @@ import { MapPicker } from '../components/map/MapPicker';
 import { createPhotoMarkerElement } from '../components/map/PhotoMarker';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
-import { uploadPhoto, updatePhoto, getPhotoImageUrl } from '../api/photos';
+import { uploadPhoto, updatePhoto } from '../api/photos';
+import { PhotoImage } from '../components/photos/PhotoImage';
 import { createRouteFromPhotos } from '../api/routes';
 import { usePreferredMapCenter } from '../hooks/usePreferredMapCenter';
 import type { Photo } from '../types/photo';
@@ -325,8 +326,9 @@ export function CreateRouteFromPhotos() {
                     }}
                   >
                     <span style={{ fontWeight: 500, minWidth: '1.5rem' }}>{index + 1}</span>
-                    <img
-                      src={getPhotoImageUrl(photo.id, 'thumbnail')}
+                    <PhotoImage
+                      photoId={photo.id}
+                      size="thumbnail"
                       alt=""
                       style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }}
                     />
