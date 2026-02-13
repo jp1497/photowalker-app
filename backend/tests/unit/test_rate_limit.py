@@ -9,8 +9,8 @@ from starlette.requests import Request
 
 from app.core.config import Settings
 from app.middleware.rate_limit import (
-    RateLimitMiddleware,
     SKIP_PATHS,
+    RateLimitMiddleware,
     _client_ip,
 )
 
