@@ -13,9 +13,13 @@ interface PhotoGalleryProps {
   /** When a pin is focused from the map, highlight this photo and open in modal if set. */
   selectedPhotoId?: string | null;
   onSelectPhoto?: (photoId: string) => void;
+  /** If true, show "Edit location" in the lightbox (route owner). */
+  isOwner?: boolean;
+  /** Called when user chooses to edit this photo's location. */
+  onEditLocation?: (photoId: string) => void;
 }
 
-export function PhotoGallery({ photos, selectedPhotoId = null, onSelectPhoto }: PhotoGalleryProps) {
+export function PhotoGallery({ photos, selectedPhotoId = null, onSelectPhoto, isOwner, onEditLocation }: PhotoGalleryProps) {
   const [modalIndex, setModalIndex] = useState<number | null>(null);
 
   const selectedIndex = selectedPhotoId ? photos.findIndex((p) => p.id === selectedPhotoId) : -1;
@@ -93,23 +97,39 @@ export function PhotoGallery({ photos, selectedPhotoId = null, onSelectPhoto }: 
           }}
           onClick={closeModal}
         >
-          <button
-            type="button"
-            onClick={closeModal}
-            style={{
-              position: 'absolute',
-              top: 16,
-              right: 16,
-              background: '#fff',
-              border: 'none',
-              borderRadius: 4,
-              padding: '0.5rem 1rem',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-            }}
-          >
-            Close
-          </button>
+          <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: '0.5rem' }}>
+            {isOwner && onEditLocation && (
+              <button
+                type="button"
+                onClick={() => onEditLocation(photos[modalIndex].id)}
+                style={{
+                  background: '#2563eb',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 4,
+                  padding: '0.5rem 1rem',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                }}
+              >
+                Edit location
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={closeModal}
+              style={{
+                background: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                padding: '0.5rem 1rem',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+              }}
+            >
+              Close
+            </button>
+          </div>
           <div
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '90vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}

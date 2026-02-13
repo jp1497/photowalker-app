@@ -83,6 +83,7 @@ class RouteResponse(BaseModel):
     route_geometry: dict[str, Any]
     distance_meters: float
     is_public: bool
+    is_draft: bool = False
     created_at: datetime
     updated_at: datetime
     tag_names: list[str] = Field(default_factory=list, serialization_alias="tags")

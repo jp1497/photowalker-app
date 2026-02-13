@@ -116,8 +116,8 @@ def test_post_photos_with_valid_jpeg_gps_returns_201() -> None:
 
 
 @requires_postgres
-def test_post_photos_with_jpeg_without_gps_returns_400() -> None:
-    """POST /v1/photos with JPEG without GPS returns 400."""
+def test_post_photos_with_jpeg_without_gps_returns_201_with_null_location() -> None:
+    """POST /v1/photos with JPEG without GPS returns 201, photo with location=null (PRD v3 FR-R3)."""
     settings = _photo_settings()
     app = create_app(settings)
     app.dependency_overrides[get_settings] = lambda: settings
@@ -137,9 +137,10 @@ def test_post_photos_with_jpeg_without_gps_returns_400() -> None:
                 files={"file": ("photo.jpg", MINIMAL_JPEG, "image/jpeg")},
                 data={"route_ids": f'["{route_id}"]'},
             )
-        assert upload_resp.status_code == 400
-        assert upload_resp.json()["error"]["code"] == "VALIDATION_ERROR"
-        assert "GPS" in upload_resp.json()["error"]["message"]
+        assert upload_resp.status_code == 201
+        data = upload_resp.json()
+        assert "photo" in data
+        assert data["photo"]["location"] is None
     finally:
         app.dependency_overrides.pop(get_settings, None)
 
@@ -236,6 +237,88 @@ def test_patch_photos_enforces_ownership() -> None:
             )
         assert patch_resp.status_code == 403
         assert patch_resp.json()["error"]["code"] == "FORBIDDEN"
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_patch_photos_with_location_updates_and_returns_photo() -> None:
+    """PATCH /v1/photos/{id} with location updates and returns photo (PRD v3 FR-R3)."""
+    from unittest.mock import patch
+    settings = _photo_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        user, token = _create_user_and_token_sync(settings)
+        with TestClient(app) as client:
+            create_resp = client.post(
+                "/v1/routes",
+                headers={"Authorization": f"Bearer {token}"},
+                json=_valid_route_payload(),
+            )
+            assert create_resp.status_code == 201
+            route_id = create_resp.json()["route"]["id"]
+            with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
+                with patch("app.services.photo_service.extract_captured_at", return_value=None):
+                    up = client.post(
+                        "/v1/photos",
+                        headers={"Authorization": f"Bearer {token}"},
+                        files={"file": ("p.jpg", MINIMAL_JPEG, "image/jpeg")},
+                        data={"route_ids": f'["{route_id}"]'},
+                    )
+            assert up.status_code == 201
+            photo_id = up.json()["photo"]["id"]
+            patch_resp = client.patch(
+                f"/v1/photos/{photo_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"location": {"type": "Point", "coordinates": [-122.5, 37.9]}},
+            )
+        assert patch_resp.status_code == 200
+        data = patch_resp.json()
+        assert "photo" in data
+        loc = data["photo"]["location"]
+        assert loc is not None
+        assert loc["type"] == "Point"
+        assert loc["coordinates"] == [-122.5, 37.9]
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_patch_photos_with_invalid_location_returns_400() -> None:
+    """PATCH /v1/photos/{id} with invalid location returns 400."""
+    from unittest.mock import patch
+    settings = _photo_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        user, token = _create_user_and_token_sync(settings)
+        with TestClient(app) as client:
+            create_resp = client.post(
+                "/v1/routes",
+                headers={"Authorization": f"Bearer {token}"},
+                json=_valid_route_payload(),
+            )
+            assert create_resp.status_code == 201
+            route_id = create_resp.json()["route"]["id"]
+            with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
+                with patch("app.services.photo_service.extract_captured_at", return_value=None):
+                    up = client.post(
+                        "/v1/photos",
+                        headers={"Authorization": f"Bearer {token}"},
+                        files={"file": ("p.jpg", MINIMAL_JPEG, "image/jpeg")},
+                        data={"route_ids": f'["{route_id}"]'},
+                    )
+            assert up.status_code == 201
+            photo_id = up.json()["photo"]["id"]
+            patch_resp = client.patch(
+                f"/v1/photos/{photo_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"location": {"type": "Point", "coordinates": [200, 37.9]}},
+            )
+        assert patch_resp.status_code == 400
+        assert patch_resp.json()["error"]["code"] == "VALIDATION_ERROR"
+        assert "longitude" in patch_resp.json()["error"]["message"].lower()
     finally:
         app.dependency_overrides.pop(get_settings, None)
 

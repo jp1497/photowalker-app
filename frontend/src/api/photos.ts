@@ -2,6 +2,19 @@
 import { apiClient } from './client';
 import type { Photo, RoutePhotosResponse, UploadPhotoResponse } from '../types/photo';
 
+/** GeoJSON Point for PATCH location. */
+export interface PhotoLocationUpdate {
+  type: 'Point';
+  coordinates: [number, number];
+}
+
+/** Body for PATCH /v1/photos/{id} */
+export interface PhotoUpdateBody {
+  location?: PhotoLocationUpdate;
+  caption?: string | null;
+  route_ids?: string[] | null;
+}
+
 const baseURL = import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL ?? 'http://localhost:8000');
 
 /** Build URL for photo image (thumbnail or original). Browser will request with same-origin credentials. */
@@ -45,4 +58,10 @@ export async function fetchPhotoImageBlob(photoId: string, size: 'thumbnail' | '
   const url = getPhotoImageUrl(photoId, size);
   const response = await apiClient.get(url, { responseType: 'blob' });
   return response.data as Blob;
+}
+
+/** Update photo (PATCH). Returns updated photo. */
+export async function updatePhoto(photoId: string, body: PhotoUpdateBody): Promise<Photo> {
+  const { data } = await apiClient.patch<Photo>(`/v1/photos/${encodeURIComponent(photoId)}`, body);
+  return data;
 }

@@ -46,7 +46,9 @@ async def test_browse_routes_returns_only_public_routes(db_session: AsyncSession
     await route_service.create_route(db_session, user.id, private_data)
     await db_session.flush()
 
-    routes, total, page, per_page = await discovery_service.browse_routes(db_session)
+    routes, total, page, per_page = await discovery_service.browse_routes(
+        db_session, author_id=user.id
+    )
     assert total == 1
     assert len(routes) == 1
     assert routes[0].slug == "public-route"
@@ -76,7 +78,9 @@ async def test_browse_routes_bbox_filter_returns_routes_within_bounds(db_session
     await db_session.flush()
 
     bbox = (-122.42, 37.78, -122.38, 37.84)  # ~20 km², under 50 km² limit
-    routes, total, _, _ = await discovery_service.browse_routes(db_session, bbox=bbox)
+    routes, total, _, _ = await discovery_service.browse_routes(
+        db_session, bbox=bbox, author_id=user.id
+    )
     assert total == 1
     assert len(routes) == 1
     assert routes[0].slug == "inside-route"
@@ -101,7 +105,9 @@ async def test_browse_routes_tags_filter_and_logic(db_session: AsyncSession) -> 
     await route_service.create_route(db_session, user.id, r3)
     await db_session.flush()
 
-    routes, total, _, _ = await discovery_service.browse_routes(db_session, tags=["urban", "night"])
+    routes, total, _, _ = await discovery_service.browse_routes(
+        db_session, tags=["urban", "night"], author_id=user.id
+    )
     assert total == 1
     assert len(routes) == 1
     assert routes[0].slug == "urban-night"
@@ -124,7 +130,7 @@ async def test_browse_routes_pagination(db_session: AsyncSession) -> None:
     await db_session.flush()
 
     routes, total, page, per_page = await discovery_service.browse_routes(
-        db_session, page=1, per_page=2
+        db_session, page=1, per_page=2, author_id=user.id
     )
     assert total == 4
     assert page == 1
@@ -132,7 +138,7 @@ async def test_browse_routes_pagination(db_session: AsyncSession) -> None:
     assert len(routes) == 2
 
     routes_p2, total_p2, page_p2, _ = await discovery_service.browse_routes(
-        db_session, page=2, per_page=2
+        db_session, page=2, per_page=2, author_id=user.id
     )
     assert total_p2 == 4
     assert page_p2 == 2

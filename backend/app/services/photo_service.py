@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import Settings
 from app.core.exceptions import PhotoForbiddenError, PhotoNotFoundError
 from app.models.photo import Photo
+from app.models.route import Route
 from app.models.route_photo import RoutePhoto
 from app.storage.s3 import delete_file, photo_original_key, upload_file
 from app.utils.exif import MAX_PHOTO_BYTES, extract_captured_at, extract_gps
@@ -32,15 +33,17 @@ async def upload_photo(
     caption: Optional[str],
     route_ids: List[UUID],
 ) -> Photo:
-    """Extract EXIF GPS, reject if missing; upload to S3; insert photo and route_photos. Enqueues thumbnail job."""
+    """Extract EXIF GPS if present; upload to S3; insert photo and route_photos. Enqueues thumbnail job.
+    If GPS missing, stores with location=NULL. Allows route_ids=[] for photos uploaded for new route creation."""
     if len(file_content) > MAX_PHOTO_BYTES:
         raise ValueError("Photo exceeds 10MB limit")
     if not file_content.startswith(JPEG_HEADER):
         raise ValueError("Only JPEG images are allowed")
     gps = extract_gps(file_content)
-    if gps is None:
-        raise ValueError("Photo has no GPS coordinates in EXIF")
-    lat, lon = gps
+    location: Optional[object] = None
+    if gps is not None:
+        lat, lon = gps
+        location = WKTElement(f"POINT({lon} {lat})", srid=4326)
     caption_clean = (caption or "").strip()[:CAPTION_MAX_LEN] or None
 
     for rid in route_ids:
@@ -55,7 +58,6 @@ async def upload_photo(
     upload_file(settings, key_original, file_content, content_type="image/jpeg")
 
     captured_at = extract_captured_at(file_content)
-    location = WKTElement(f"POINT({lon} {lat})", srid=4326)
 
     photo = Photo(
         id=photo_id,
@@ -123,24 +125,46 @@ async def get_photo_by_id_with_routes(db: AsyncSession, photo_id: UUID) -> Optio
     return r.scalar_one_or_none()
 
 
+def _validate_location_coords(location_dict: dict) -> tuple[float, float]:
+    """Validate GeoJSON Point coordinates. Returns (lon, lat). Raises ValueError if invalid."""
+    from app.schemas.photo import _validate_geojson_point
+    return _validate_geojson_point(location_dict)
+
+
 async def update_photo(
     db: AsyncSession,
     photo_id: UUID,
     user_id: UUID,
     caption: Optional[str],
     route_ids: Optional[List[UUID]],
+    location: Optional[dict] = None,
 ) -> Photo:
-    """Update caption and/or route associations. Raises PhotoNotFoundError or PhotoForbiddenError."""
+    """Update caption, route associations, and/or location. Raises PhotoNotFoundError or PhotoForbiddenError."""
     photo = await get_photo_by_id(db, photo_id)
     if photo is None:
         raise PhotoNotFoundError()
     if photo.user_id != user_id:
         raise PhotoForbiddenError()
 
+    if location is not None:
+        lon, lat = _validate_location_coords(location)
+        photo.location = WKTElement(f"POINT({lon} {lat})", srid=4326)
+
     if caption is not None:
         photo.caption = caption.strip()[:CAPTION_MAX_LEN] or None
 
     if route_ids is not None:
+        # Validate all route_ids exist and belong to user before touching route_photos
+        if route_ids:
+            r = await db.execute(
+                select(Route.id).where(Route.id.in_(route_ids), Route.user_id == user_id)
+            )
+            found_ids = {row[0] for row in r.scalars().all()}
+            missing = [rid for rid in route_ids if rid not in found_ids]
+            if missing:
+                raise ValueError(
+                    "One or more route IDs not found or you do not have access to them"
+                )
         for rid in route_ids:
             count_result = await db.execute(
                 select(func.count()).select_from(RoutePhoto).where(RoutePhoto.route_id == rid)

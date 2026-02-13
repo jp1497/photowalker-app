@@ -32,9 +32,9 @@ class Photo(Base):
     )
     s3_key_original: Mapped[str] = mapped_column(String(500), nullable=False)
     s3_key_thumbnail: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    location: Mapped[object] = mapped_column(
+    location: Mapped[Optional[object]] = mapped_column(
         Geometry(geometry_type="POINT", srid=4326),
-        nullable=False,
+        nullable=True,
     )
     caption: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     exif_data: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)

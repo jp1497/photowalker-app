@@ -147,3 +147,50 @@ async def test_geometry_columns_accept_wkt(db_session) -> None:
     result = await db_session.execute(select(Photo).where(Photo.id == photo.id))
     loaded_photo = result.scalar_one()
     assert loaded_photo.location is not None
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_photo_with_null_location_is_valid(db_session) -> None:
+    """Step 1.1: Photo with location=NULL is valid (photos without GPS)."""
+    user = User(google_id="null-loc", email="null@test.com", name="Null Loc User")
+    db_session.add(user)
+    await db_session.flush()
+
+    photo = Photo(
+        user_id=user.id,
+        s3_key_original="photos/null/1/original.jpg",
+        location=None,
+        file_size_bytes=1000,
+    )
+    db_session.add(photo)
+    await db_session.flush()
+
+    result = await db_session.execute(select(Photo).where(Photo.id == photo.id))
+    loaded = result.scalar_one()
+    assert loaded.location is None
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_route_with_is_draft_true_is_valid(db_session) -> None:
+    """Step 1.1: Route with is_draft=True is valid."""
+    user = User(google_id="draft-user", email="draft@test.com", name="Draft User")
+    db_session.add(user)
+    await db_session.flush()
+
+    route = Route(
+        user_id=user.id,
+        slug="draft-route-abc",
+        title="Draft Route",
+        route_geometry=WKTElement("LINESTRING(-122.4 37.8, -122.41 37.81)", srid=4326),
+        distance_meters=50.0,
+        is_public=False,
+        is_draft=True,
+    )
+    db_session.add(route)
+    await db_session.flush()
+
+    result = await db_session.execute(select(Route).where(Route.id == route.id))
+    loaded = result.scalar_one()
+    assert loaded.is_draft is True

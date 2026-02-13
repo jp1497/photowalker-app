@@ -39,6 +39,7 @@ class Route(Base):
     )
     distance_meters: Mapped[float] = mapped_column(Float, nullable=False)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    is_draft: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

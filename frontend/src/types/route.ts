@@ -38,7 +38,7 @@ export interface RouteDetailPhoto {
   id: string;
   user_id: string;
   caption: string | null;
-  location: { type: string; coordinates: number[] };
+  location: { type: string; coordinates: number[] } | null;
   s3_key_original: string;
   s3_key_thumbnail: string | null;
   file_size_bytes: number;
