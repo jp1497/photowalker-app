@@ -1,8 +1,9 @@
 /** Route detail view: map with route polyline and photo pins, metadata. */
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
+import { fetchPhotoImageBlob } from '../../api/photos';
 import { MapView } from '../map/MapView';
-import { createPhotoMarkerElement } from '../map/PhotoMarker';
+import { createPhotoMarkerElement, setMarkerThumbnail } from '../map/PhotoMarker';
 import type { Route } from '../../types/route';
 
 export interface RoutePhoto {
@@ -47,9 +48,61 @@ function getBoundsFromCoords(coords: [number, number][]): [[number, number], [nu
 export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: RouteViewProps) {
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const photoIdsRef = useRef<string[]>([]);
+  const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
+  const thumbnailUrlsRef = useRef<Record<string, string>>({});
 
   const coordinates = route.route_geometry?.coordinates ?? [];
   const hasRoute = coordinates.length >= 2;
+
+  const photoIdsWithLocation = useMemo(
+    () => photos.filter((p) => (p.location?.coordinates?.length ?? 0) >= 2).map((p) => p.id),
+    [photos]
+  );
+  const photoIdsKey = useMemo(() => photoIdsWithLocation.join(','), [photoIdsWithLocation]);
+
+  useEffect(() => {
+    if (photoIdsWithLocation.length === 0) return;
+    let cancelled = false;
+    const seen = new Set<string>();
+    photoIdsWithLocation.forEach((id) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      fetchPhotoImageBlob(id, 'thumbnail')
+        .then((blob) => {
+          if (cancelled) return;
+          const url = URL.createObjectURL(blob);
+          setThumbnailUrls((prev) => {
+            const next = { ...prev, [id]: url };
+            thumbnailUrlsRef.current = next;
+            return next;
+          });
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setThumbnailUrls((prev) => ({ ...prev, [id]: '' }));
+        });
+    });
+    return () => {
+      cancelled = true;
+      Object.values(thumbnailUrlsRef.current).forEach((u) => {
+        if (u) URL.revokeObjectURL(u);
+      });
+      thumbnailUrlsRef.current = {};
+    };
+  }, [photoIdsKey]);
+
+  const applyThumbnailsToMarkers = () => {
+    const urls = thumbnailUrlsRef.current;
+    const ids = photoIdsRef.current;
+    markersRef.current.forEach((marker, i) => {
+      const photoId = ids[i];
+      const url = photoId ? urls[photoId] : undefined;
+      if (url) {
+        const el = marker.getElement();
+        if (el) setMarkerThumbnail(el, url);
+      }
+    });
+  };
 
   const handleMapReady = (map: maplibregl.Map) => {
     photoIdsRef.current = [];
@@ -92,7 +145,12 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
       markersRef.current.push(marker);
       photoIdsRef.current.push(photo.id);
     }
+    applyThumbnailsToMarkers();
   };
+
+  useEffect(() => {
+    applyThumbnailsToMarkers();
+  }, [thumbnailUrls]);
 
   useEffect(() => {
     const ids = photoIdsRef.current;
@@ -100,7 +158,9 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
       const el = marker.getElement();
       if (!el) return;
       const isSelected = ids[i] === selectedPhotoId;
-      el.style.background = isSelected ? '#1d4ed8' : '#2563eb';
+      const dot = el.querySelector('.photo-marker-pin-dot') as HTMLElement | null;
+      const target = dot ?? el;
+      target.style.background = isSelected ? '#1d4ed8' : '#2563eb';
       el.style.transform = isSelected ? 'scale(1.2)' : 'none';
     });
   }, [selectedPhotoId]);
@@ -109,6 +169,10 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
     return () => {
       markersRef.current = [];
       photoIdsRef.current = [];
+      Object.values(thumbnailUrlsRef.current).forEach((u) => {
+        if (u) URL.revokeObjectURL(u);
+      });
+      thumbnailUrlsRef.current = {};
     };
   }, []);
 
