@@ -1,5 +1,4 @@
 """Unit tests for app.utils.slug."""
-import pytest
 
 from app.utils.slug import ensure_unique_slug, generate_slug
 

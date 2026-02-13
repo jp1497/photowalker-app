@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import RouteForbiddenError, RouteNotFoundError
 from app.models.photo import Photo
-from app.models.route import Route
 from app.models.user import User
 from app.schemas.route import RouteCreate, RouteFromPhotosCreate, RouteGeometrySchema, RouteUpdate
 from app.services import route_service

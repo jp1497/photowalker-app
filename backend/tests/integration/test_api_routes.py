@@ -16,8 +16,10 @@ from tests.integration.test_api_photos import MINIMAL_JPEG, _photo_settings
 
 async def _create_user_and_token(settings: Settings) -> tuple[User, str]:
     """Create a user in the DB and return (user, access_token). Uses same DATABASE_URL as app."""
-    from app.db.base import Base
     from sqlalchemy import text
+
+    from app.db.base import Base
+
     uid = uuid4().hex[:8]
     engine = create_engine(settings)
     async with engine.begin() as conn:
