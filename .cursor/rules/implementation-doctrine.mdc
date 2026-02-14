@@ -52,3 +52,7 @@ When a **service** enforces invariants (e.g. "route distance must be > 0" or "ph
 ## Geometry and Serialization in Tests
 
 When asserting on GeoJSON coordinates from geometry (e.g. Shapely `mapping(to_shape(geom))` or similar), the serialized coordinates may be **tuples**, not lists. Tests that compare to list literals (e.g. `assert coords[0] == [-122.4, 37.8]`) can fail due to type mismatch. Use `list(geom["coordinates"][i])` in the assertion, or assert tuple equality, so the comparison is consistent with the actual serialized type.
+
+## Conditional Simplification and Null Safety
+
+When you **simplify a conditional** (e.g. change `if (!a || !b)` to `if (!a)`), re-audit the block that runs when the condition is true. No code in that block may use a variable that is now guaranteed to be null or undefined there (e.g. in the `if (!map)` branch, do not call `map.getSource(...)`). Otherwise you introduce a runtime error that static analysis may not catch.

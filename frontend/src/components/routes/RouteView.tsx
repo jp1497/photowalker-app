@@ -1,8 +1,16 @@
 /** Route detail view: map with route polyline and photo pins, metadata. */
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
+import { fetchPhotoImageBlob } from '../../api/photos';
+import { MapPanel } from '../map/MapPanel';
 import { MapView } from '../map/MapView';
-import { createPhotoMarkerElement } from '../map/PhotoMarker';
+import {
+  createDefaultPinImageData,
+  imageToPinImageData,
+  PIN_BORDER_WIDTH,
+  PIN_ICON_SIZE,
+} from '../map/pinImageUtils';
+import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { Route } from '../../types/route';
 
 export interface RoutePhoto {
@@ -20,12 +28,28 @@ export interface RouteViewProps {
   photos: RoutePhoto[];
   /** Highlight this photo pin on the map. */
   selectedPhotoId?: string | null;
-  /** Called when a photo pin is clicked. */
-  onSelectPhoto?: (photoId: string) => void;
+  /** Called when a photo pin is clicked. Pass null to clear selection. */
+  onSelectPhoto?: (photoId: string | null) => void;
 }
 
 const ROUTE_SOURCE_ID = 'route-line';
 const ROUTE_LAYER_ID = 'route-line-layer';
+const PHOTOS_SOURCE_ID = 'route-photos';
+const CLUSTER_LAYER_ID = 'route-photos-clusters';
+const UNCLUSTERED_LAYER_ID = 'route-photos-unclustered';
+const UNCLUSTERED_SELECTED_LAYER_ID = 'route-photos-unclustered-selected';
+const CLUSTER_MAX_ZOOM = 14;
+const CLUSTER_RADIUS = 50;
+const CLUSTER_STACK_SIZE = 44;
+const CLUSTER_STACK_OFFSET = 5;
+const CLUSTER_STACK_MAX_IMAGES = 5;
+
+function pointCoordinates(geom: GeoJSON.Geometry): [number, number] | null {
+  if (geom.type === 'Point' && geom.coordinates && geom.coordinates.length >= 2) {
+    return [geom.coordinates[0], geom.coordinates[1]];
+  }
+  return null;
+}
 
 function getBoundsFromCoords(coords: [number, number][]): [[number, number], [number, number]] {
   if (coords.length === 0) return [[-122.42, 37.78], [-122.4, 37.8]];
@@ -44,71 +68,354 @@ function getBoundsFromCoords(coords: [number, number][]): [[number, number], [nu
   return [[minLng - pad, minLat - pad], [maxLng + pad, maxLat + pad]];
 }
 
-export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: RouteViewProps) {
-  const markersRef = useRef<maplibregl.Marker[]>([]);
-  const photoIdsRef = useRef<string[]>([]);
-
-  const coordinates = route.route_geometry?.coordinates ?? [];
-  const hasRoute = coordinates.length >= 2;
-
-  const handleMapReady = (map: maplibregl.Map) => {
-    photoIdsRef.current = [];
-    markersRef.current = [];
-    if (!hasRoute) return;
-
-    const geojson: GeoJSON.Feature<GeoJSON.LineString> = {
+function buildPhotosGeoJSON(photos: RoutePhoto[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
+  const features: GeoJSON.Feature<GeoJSON.Point>[] = [];
+  for (const photo of photos) {
+    const coords = photo.location?.coordinates;
+    if (!coords || coords.length < 2) continue;
+    features.push({
       type: 'Feature',
-      properties: {},
-      geometry: {
-        type: 'LineString',
-        coordinates,
-      },
-    };
-
-    map.addSource(ROUTE_SOURCE_ID, {
-      type: 'geojson',
-      data: geojson,
+      properties: { photoId: photo.id },
+      geometry: { type: 'Point', coordinates: [coords[0], coords[1]] },
     });
-    map.addLayer({
-      id: ROUTE_LAYER_ID,
-      type: 'line',
-      source: ROUTE_SOURCE_ID,
-      layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: {
-        'line-color': '#2563eb',
-        'line-width': 4,
-      },
-    });
+  }
+  return { type: 'FeatureCollection', features };
+}
 
-    const bounds = getBoundsFromCoords(coordinates);
-    map.fitBounds(bounds, { padding: 40, maxZoom: 14, duration: 0 });
+/** Create a stacked-pins DOM element for a cluster. First photoId is on top (closest to center). */
+function createClusterStackElement(
+  photoIds: string[],
+  thumbnailUrls: Record<string, string>,
+  onClick: () => void
+): HTMLElement {
+  const size = CLUSTER_STACK_SIZE;
+  const container = document.createElement('div');
+  container.className = 'cluster-stack-pins';
+  container.setAttribute('aria-hidden', 'true');
+  container.style.cssText = [
+    `position: relative; width: ${size + (CLUSTER_STACK_MAX_IMAGES - 1) * CLUSTER_STACK_OFFSET}px;`,
+    `height: ${size + (CLUSTER_STACK_MAX_IMAGES - 1) * CLUSTER_STACK_OFFSET}px;`,
+    'cursor: pointer;',
+  ].join(' ');
+  container.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onClick();
+  });
 
-    for (const photo of photos) {
-      const coords = photo.location?.coordinates;
-      if (!coords || coords.length < 2) continue;
-      const [lng, lat] = coords;
-      const el = createPhotoMarkerElement(() => onSelectPhoto?.(photo.id));
-      const marker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
-      markersRef.current.push(marker);
-      photoIdsRef.current.push(photo.id);
+  const ids = photoIds.slice(0, CLUSTER_STACK_MAX_IMAGES);
+  ids.forEach((photoId, i) => {
+    const el = document.createElement('div');
+    el.style.cssText = [
+      'position: absolute;',
+      `left: ${i * CLUSTER_STACK_OFFSET}px; top: ${i * CLUSTER_STACK_OFFSET}px;`,
+      `width: ${size}px; height: ${size}px;`,
+      'border: 2px solid #fff; border-radius: 50%;',
+      'box-shadow: 0 1px 3px rgba(0,0,0,0.3);',
+      'overflow: hidden;',
+      `z-index: ${ids.length - i};`,
+    ].join(' ');
+    const url = thumbnailUrls[photoId];
+    if (url) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = url;
+      img.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+      el.appendChild(img);
+    } else {
+      el.style.background = '#2563eb';
     }
-  };
+    container.appendChild(el);
+  });
+
+  return container;
+}
+
+export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: RouteViewProps) {
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const clusterMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
+  const thumbnailUrlsRef = useRef<Record<string, string>>({});
+
+  const coordinates = useMemo(
+    () => route.route_geometry?.coordinates ?? [],
+    [route.route_geometry]
+  );
+  const hasRoute = coordinates.length >= 2;
+  const photosWithLocation = useMemo(
+    () => photos.filter((p) => (p.location?.coordinates?.length ?? 0) >= 2),
+    [photos]
+  );
 
   useEffect(() => {
-    const ids = photoIdsRef.current;
-    markersRef.current.forEach((marker, i) => {
-      const el = marker.getElement();
-      if (!el) return;
-      const isSelected = ids[i] === selectedPhotoId;
-      el.style.background = isSelected ? '#1d4ed8' : '#2563eb';
-      el.style.transform = isSelected ? 'scale(1.2)' : 'none';
+    if (photosWithLocation.length === 0) return;
+    let cancelled = false;
+    const seen = new Set<string>();
+    photosWithLocation.forEach((p) => {
+      if (seen.has(p.id)) return;
+      seen.add(p.id);
+      fetchPhotoImageBlob(p.id, 'thumbnail')
+        .then((blob) => {
+          if (cancelled) return;
+          const url = URL.createObjectURL(blob);
+          setThumbnailUrls((prev) => {
+            const next = { ...prev, [p.id]: url };
+            thumbnailUrlsRef.current = next;
+            return next;
+          });
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setThumbnailUrls((prev) => ({ ...prev, [p.id]: '' }));
+        });
     });
+    return () => {
+      cancelled = true;
+      Object.values(thumbnailUrlsRef.current).forEach((u) => {
+        if (u) URL.revokeObjectURL(u);
+      });
+      thumbnailUrlsRef.current = {};
+    };
+  }, [photosWithLocation]);
+
+  const addImagesToMap = useCallback((map: MapLibreMap) => {
+    const defaultPin = createDefaultPinImageData();
+    if (!map.getStyle()) return;
+    if (!map.hasImage('default-pin')) {
+      map.addImage('default-pin', defaultPin);
+    }
+    photosWithLocation.forEach((p) => {
+      const url = thumbnailUrlsRef.current[p.id];
+      if (url) {
+        const img = new Image();
+        img.onload = () => {
+          if (!map.getStyle()) return;
+          try {
+            if (map.hasImage(p.id)) map.removeImage(p.id);
+            const pinData = imageToPinImageData(img);
+            map.addImage(p.id, pinData);
+          } catch {
+            /* layer/source may be gone */
+          }
+        };
+        img.src = url;
+      } else {
+        try {
+          if (!map.hasImage(p.id)) map.addImage(p.id, defaultPin);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+  }, [photosWithLocation]);
+
+  const updateClusterMarkers = useCallback((map: MapLibreMap) => {
+    clusterMarkersRef.current.forEach((m) => {
+      try {
+        m.remove();
+      } catch {
+        /* ignore */
+      }
+    });
+    clusterMarkersRef.current = [];
+
+    if (!map.getSource(PHOTOS_SOURCE_ID) || !map.getLayer(CLUSTER_LAYER_ID)) return;
+
+    const source = map.getSource(PHOTOS_SOURCE_ID) as maplibregl.GeoJSONSource;
+    const getLeaves =
+      source && typeof source.getClusterLeaves === 'function'
+        ? (clusterId: number) => source.getClusterLeaves(clusterId, 100, 0)
+        : () => Promise.resolve<GeoJSON.Feature<GeoJSON.Point>[]>([]);
+
+    const clusterFeatures = map.queryRenderedFeatures({ layers: [CLUSTER_LAYER_ID] });
+    const dist2 = (a: [number, number], b: [number, number]) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
+
+    clusterFeatures.forEach((feature) => {
+      const clusterId = feature.properties?.cluster_id as number | undefined;
+      const center = pointCoordinates(feature.geometry as GeoJSON.Point);
+      if (clusterId == null || !center) return;
+
+      getLeaves(clusterId).then((leaves) => {
+        if (!map.getSource(PHOTOS_SOURCE_ID)) return;
+        const withCoords = leaves
+          .map((f) => {
+            const c = pointCoordinates(f.geometry as GeoJSON.Point);
+            const id = (f.properties as { photoId?: string })?.photoId;
+            return c && id ? { photoId: id, coords: c } : null;
+          })
+          .filter((x): x is { photoId: string; coords: [number, number] } => x !== null);
+        withCoords.sort((a, b) => dist2(a.coords, center) - dist2(b.coords, center));
+        const photoIds = withCoords.map((x) => x.photoId);
+
+        const el = createClusterStackElement(photoIds, thumbnailUrlsRef.current, () => {
+          onSelectPhoto?.(null);
+          if (map.getLayer(UNCLUSTERED_SELECTED_LAYER_ID)) {
+            map.setFilter(UNCLUSTERED_SELECTED_LAYER_ID, ['literal', false]);
+          }
+          Promise.resolve(source.getClusterExpansionZoom(clusterId)).then((zoom) => {
+            map.easeTo({ center, zoom, duration: 300 });
+          });
+        });
+        const marker = new maplibregl.Marker({ element: el }).setLngLat(center).addTo(map);
+        clusterMarkersRef.current.push(marker);
+      });
+    });
+  }, [onSelectPhoto]);
+
+  const handleMapReady = useCallback(
+    (map: maplibregl.Map) => {
+      mapRef.current = map as MapLibreMap;
+      if (!hasRoute) return;
+
+      const lineGeojson: GeoJSON.Feature<GeoJSON.LineString> = {
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'LineString', coordinates },
+      };
+      map.addSource(ROUTE_SOURCE_ID, { type: 'geojson', data: lineGeojson });
+      map.addLayer({
+        id: ROUTE_LAYER_ID,
+        type: 'line',
+        source: ROUTE_SOURCE_ID,
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#2563eb', 'line-width': 4 },
+      });
+
+      const photosGeojson = buildPhotosGeoJSON(photos);
+      map.addSource(PHOTOS_SOURCE_ID, {
+        type: 'geojson',
+        data: photosGeojson,
+        cluster: true,
+        clusterMaxZoom: CLUSTER_MAX_ZOOM,
+        clusterRadius: CLUSTER_RADIUS,
+      });
+
+      const defaultPin = createDefaultPinImageData();
+      if (!map.hasImage('default-pin')) {
+        map.addImage('default-pin', defaultPin);
+      }
+      photosWithLocation.forEach((p) => {
+        if (map.hasImage(p.id)) return;
+        try {
+          map.addImage(p.id, defaultPin);
+        } catch {
+          /* ignore */
+        }
+      });
+
+      map.addLayer({
+        id: CLUSTER_LAYER_ID,
+        type: 'circle',
+        source: PHOTOS_SOURCE_ID,
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-radius': 32,
+          'circle-opacity': 0,
+          'circle-color': '#2563eb',
+        },
+      });
+      map.addLayer({
+        id: UNCLUSTERED_LAYER_ID,
+        type: 'symbol',
+        source: PHOTOS_SOURCE_ID,
+        filter: ['!', ['has', 'point_count']],
+        layout: {
+          'icon-image': ['get', 'photoId'],
+          'icon-size': 1,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+        },
+      });
+      map.addLayer({
+        id: UNCLUSTERED_SELECTED_LAYER_ID,
+        type: 'circle',
+        source: PHOTOS_SOURCE_ID,
+        filter: selectedPhotoId
+          ? ['all', ['!', ['has', 'point_count']], ['==', ['get', 'photoId'], selectedPhotoId]]
+          : ['literal', false],
+        paint: {
+          'circle-radius': PIN_ICON_SIZE / 2,
+          'circle-color': 'transparent',
+          'circle-stroke-width': PIN_BORDER_WIDTH,
+          'circle-stroke-color': '#1d4ed8',
+        },
+      });
+      map.on('click', CLUSTER_LAYER_ID, (e) => {
+        const feature = e.features?.[0];
+        if (!feature?.properties?.cluster_id) return;
+        const source = map.getSource(PHOTOS_SOURCE_ID) as maplibregl.GeoJSONSource;
+        if (!source?.getClusterExpansionZoom) return;
+        onSelectPhoto?.(null);
+        if (map.getLayer(UNCLUSTERED_SELECTED_LAYER_ID)) {
+          map.setFilter(UNCLUSTERED_SELECTED_LAYER_ID, ['literal', false]);
+        }
+        const clusterId = feature.properties.cluster_id;
+        Promise.resolve(source.getClusterExpansionZoom(clusterId)).then((zoom) => {
+          const geometry = feature.geometry as GeoJSON.Point;
+          const center = pointCoordinates(geometry);
+          if (center) map.easeTo({ center, zoom, duration: 300 });
+        });
+      });
+
+      map.on('click', UNCLUSTERED_LAYER_ID, (e) => {
+        const feature = e.features?.[0];
+        const photoId = feature?.properties?.photoId as string | undefined;
+        if (photoId) onSelectPhoto?.(photoId);
+      });
+      map.on('click', UNCLUSTERED_SELECTED_LAYER_ID, (e) => {
+        const feature = e.features?.[0];
+        const photoId = feature?.properties?.photoId as string | undefined;
+        if (photoId) onSelectPhoto?.(photoId);
+      });
+
+      const bounds = getBoundsFromCoords(coordinates);
+      map.fitBounds(bounds, { padding: 40, maxZoom: 14, duration: 0 });
+
+      addImagesToMap(map as MapLibreMap);
+      updateClusterMarkers(map as MapLibreMap);
+
+      const onMoveEnd = () => updateClusterMarkers(map as MapLibreMap);
+      map.on('idle', onMoveEnd);
+      map.on('moveend', onMoveEnd);
+    },
+    [hasRoute, coordinates, photos, photosWithLocation, onSelectPhoto, addImagesToMap, updateClusterMarkers, selectedPhotoId]
+  );
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    addImagesToMap(map);
+    updateClusterMarkers(map);
+  }, [thumbnailUrls, addImagesToMap, updateClusterMarkers]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.getLayer(UNCLUSTERED_SELECTED_LAYER_ID)) return;
+    if (selectedPhotoId) {
+      map.setFilter(UNCLUSTERED_SELECTED_LAYER_ID, [
+        'all',
+        ['!', ['has', 'point_count']],
+        ['==', ['get', 'photoId'], selectedPhotoId],
+      ]);
+    } else {
+      map.setFilter(UNCLUSTERED_SELECTED_LAYER_ID, ['literal', false]);
+    }
   }, [selectedPhotoId]);
 
   useEffect(() => {
     return () => {
-      markersRef.current = [];
-      photoIdsRef.current = [];
+      clusterMarkersRef.current.forEach((m) => {
+        try {
+          m.remove();
+        } catch {
+          /* ignore */
+        }
+      });
+      clusterMarkersRef.current = [];
+      Object.values(thumbnailUrlsRef.current).forEach((u) => {
+        if (u) URL.revokeObjectURL(u);
+      });
+      thumbnailUrlsRef.current = {};
+      mapRef.current = null;
     };
   }, []);
 
@@ -117,9 +424,9 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div style={{ height: 320, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden' }}>
+      <MapPanel>
         <MapView onMapReady={handleMapReady} style={{ width: '100%', height: '100%' }} />
-      </div>
+      </MapPanel>
       <section data-testid="route-detail-content">
         <h1 data-testid="route-detail-title" style={{ margin: 0, fontSize: '1.75rem' }}>{route.title}</h1>
         {route.description && (
