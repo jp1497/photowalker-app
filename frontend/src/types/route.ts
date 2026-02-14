@@ -18,7 +18,7 @@ export interface RouteCreatePayload {
   is_public: boolean;
 }
 
-/** Route from API (route detail and list) */
+/** Route from API (route detail and list). first_photo_id set on browse response only. */
 export interface Route {
   id: string;
   user_id: string;
@@ -31,6 +31,8 @@ export interface Route {
   created_at: string;
   updated_at: string;
   tags: string[];
+  /** First photo id (display order) for list/map thumbnails. Present from browse API. */
+  first_photo_id?: string | null;
 }
 
 /** Photo as returned in route detail (same shape as Photo). */

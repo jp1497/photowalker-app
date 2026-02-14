@@ -1,6 +1,7 @@
 /** Paginated list of routes for browse. Click route → navigate to detail. */
 import { useNavigate } from 'react-router-dom';
 import { Loading } from '../common/Loading';
+import { getPhotoImageUrl } from '../../api/photos';
 import type { Route } from '../../types/route';
 
 export interface RouteListProps {
@@ -64,6 +65,8 @@ export function RouteList({ routes, pagination, loading, onPageChange }: RouteLi
           <li
             key={route.id}
             style={{
+              display: 'flex',
+              gap: '0.75rem',
               padding: '0.75rem',
               marginBottom: '0.5rem',
               border: '1px solid #e5e7eb',
@@ -81,6 +84,28 @@ export function RouteList({ routes, pagination, loading, onPageChange }: RouteLi
             role="button"
             tabIndex={0}
           >
+            <div
+              style={{
+                flexShrink: 0,
+                width: 56,
+                height: 56,
+                borderRadius: 6,
+                overflow: 'hidden',
+                background: '#e5e7eb',
+              }}
+            >
+              {route.first_photo_id ? (
+                <img
+                  src={getPhotoImageUrl(route.first_photo_id, 'thumbnail')}
+                  alt=""
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              ) : null}
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
             <strong style={{ display: 'block', marginBottom: '0.25rem' }}>{route.title}</strong>
             {route.description && (
               <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
@@ -115,6 +140,7 @@ export function RouteList({ routes, pagination, loading, onPageChange }: RouteLi
                 ))}
               </div>
             )}
+            </div>
           </li>
         ))}
       </ul>

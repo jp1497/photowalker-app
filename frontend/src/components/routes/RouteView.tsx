@@ -3,6 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import { fetchPhotoImageBlob } from '../../api/photos';
 import { MapView } from '../map/MapView';
+import {
+  createDefaultPinImageData,
+  imageToPinImageData,
+  PIN_BORDER_WIDTH,
+  PIN_ICON_SIZE,
+} from '../map/pinImageUtils';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { Route } from '../../types/route';
 
@@ -33,8 +39,6 @@ const UNCLUSTERED_LAYER_ID = 'route-photos-unclustered';
 const UNCLUSTERED_SELECTED_LAYER_ID = 'route-photos-unclustered-selected';
 const CLUSTER_MAX_ZOOM = 14;
 const CLUSTER_RADIUS = 50;
-const PIN_ICON_SIZE = 44;
-const PIN_BORDER_WIDTH = 2;
 const CLUSTER_STACK_SIZE = 44;
 const CLUSTER_STACK_OFFSET = 5;
 const CLUSTER_STACK_MAX_IMAGES = 5;
@@ -75,54 +79,6 @@ function buildPhotosGeoJSON(photos: RoutePhoto[]): GeoJSON.FeatureCollection<Geo
     });
   }
   return { type: 'FeatureCollection', features };
-}
-
-function createDefaultPinImageData(): { width: number; height: number; data: Uint8ClampedArray } {
-  const size = PIN_ICON_SIZE;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    return { width: size, height: size, data: new Uint8ClampedArray(size * size * 4) };
-  }
-  const r = size / 2 - PIN_BORDER_WIDTH;
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, r, 0, Math.PI * 2);
-  ctx.fillStyle = '#2563eb';
-  ctx.fill();
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = PIN_BORDER_WIDTH;
-  ctx.stroke();
-  const imageData = ctx.getImageData(0, 0, size, size);
-  return { width: size, height: size, data: imageData.data };
-}
-
-/** Resize a loaded image to PIN_ICON_SIZE and return ImageData for map.addImage. White border to match default pin. */
-function imageToPinImageData(img: HTMLImageElement): { width: number; height: number; data: Uint8ClampedArray } {
-  const size = PIN_ICON_SIZE;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    return { width: size, height: size, data: new Uint8ClampedArray(size * size * 4) };
-  }
-  const r = size / 2 - PIN_BORDER_WIDTH;
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, r, 0, Math.PI * 2);
-  ctx.closePath();
-  ctx.clip();
-  ctx.drawImage(img, 0, 0, size, size);
-  ctx.restore();
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, r, 0, Math.PI * 2);
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = PIN_BORDER_WIDTH;
-  ctx.stroke();
-  const imageData = ctx.getImageData(0, 0, size, size);
-  return { width: size, height: size, data: imageData.data };
 }
 
 /** Create a stacked-pins DOM element for a cluster. First photoId is on top (closest to center). */

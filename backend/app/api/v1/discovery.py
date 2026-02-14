@@ -80,7 +80,12 @@ async def browse_routes(
             },
         )
 
+    routes_out = []
+    for r in routes:
+        d = RouteResponse.model_validate(r).model_dump(mode="json", by_alias=True)
+        d["first_photo_id"] = str(r.route_photos[0].photo_id) if r.route_photos else None
+        routes_out.append(d)
     return {
-        "routes": [RouteResponse.model_validate(r).model_dump(mode="json", by_alias=True) for r in routes],
+        "routes": routes_out,
         "pagination": {"page": page_out, "per_page": per_page_out, "total": total},
     }
