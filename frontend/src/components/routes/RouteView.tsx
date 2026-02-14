@@ -136,13 +136,15 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const thumbnailUrlsRef = useRef<Record<string, string>>({});
 
-  const coordinates = route.route_geometry?.coordinates ?? [];
+  const coordinates = useMemo(
+    () => route.route_geometry?.coordinates ?? [],
+    [route.route_geometry]
+  );
   const hasRoute = coordinates.length >= 2;
   const photosWithLocation = useMemo(
     () => photos.filter((p) => (p.location?.coordinates?.length ?? 0) >= 2),
     [photos]
   );
-  const photoIdsKey = useMemo(() => photosWithLocation.map((p) => p.id).join(','), [photosWithLocation]);
 
   useEffect(() => {
     if (photosWithLocation.length === 0) return;
@@ -173,7 +175,7 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
       });
       thumbnailUrlsRef.current = {};
     };
-  }, [photoIdsKey]);
+  }, [photosWithLocation]);
 
   const addImagesToMap = useCallback((map: MapLibreMap) => {
     const defaultPin = createDefaultPinImageData();
@@ -204,7 +206,7 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
         }
       }
     });
-  }, [photoIdsKey]);
+  }, [photosWithLocation]);
 
   const updateClusterMarkers = useCallback((map: MapLibreMap) => {
     clusterMarkersRef.current.forEach((m) => {
@@ -257,7 +259,7 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
         clusterMarkersRef.current.push(marker);
       });
     });
-  }, []);
+  }, [onSelectPhoto]);
 
   const handleMapReady = useCallback(
     (map: maplibregl.Map) => {
@@ -375,7 +377,7 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
       map.on('idle', onMoveEnd);
       map.on('moveend', onMoveEnd);
     },
-    [hasRoute, coordinates, photos, photosWithLocation, onSelectPhoto, addImagesToMap, updateClusterMarkers]
+    [hasRoute, coordinates, photos, photosWithLocation, onSelectPhoto, addImagesToMap, updateClusterMarkers, selectedPhotoId]
   );
 
   useEffect(() => {

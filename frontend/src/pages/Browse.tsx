@@ -133,10 +133,6 @@ export function Browse() {
     () => routes.filter((r) => r.first_photo_id),
     [routes]
   );
-  const firstPhotoIdsKey = useMemo(
-    () => routesWithPhoto.map((r) => r.first_photo_id as string).join(','),
-    [routesWithPhoto]
-  );
 
   useEffect(() => {
     if (routesWithPhoto.length === 0) return;
@@ -168,7 +164,7 @@ export function Browse() {
       });
       thumbnailUrlsRef.current = {};
     };
-  }, [firstPhotoIdsKey]);
+  }, [routesWithPhoto]);
 
   const fetchList = useCallback(() => {
     setLoading(true);
@@ -270,7 +266,7 @@ export function Browse() {
         }
       }
     });
-  }, [firstPhotoIdsKey]);
+  }, [routesWithPhoto]);
 
   const updateClusterMarkers = useCallback((map: MapLibreMap) => {
     clusterMarkersRef.current.forEach((m) => {
@@ -320,7 +316,7 @@ export function Browse() {
         clusterMarkersRef.current.push(marker);
       });
     });
-  }, [navigate]);
+  }, []);
 
   const handleMapReady = useCallback((map: MapLibreMap) => {
     mapRef.current = map;
