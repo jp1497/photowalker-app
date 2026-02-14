@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException
 
 from app.auth.dependencies import get_current_user_required
+from app.auth.oauth import GoogleUserInfo
 from app.core.config import Settings, get_settings
 from app.db.dependencies import get_db
 from app.models.user import User
@@ -19,7 +20,6 @@ from app.schemas.auth import (
     LogoutResponse,
 )
 from app.schemas.user import UserResponse, UserUpdate
-from app.auth.oauth import GoogleUserInfo
 from app.services.auth_service import (
     create_or_get_user,
     exchange_code_for_user,

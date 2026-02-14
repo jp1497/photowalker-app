@@ -48,6 +48,28 @@ class RouteCreate(BaseModel):
         return out[:MAX_TAGS]
 
 
+class RouteFromPhotosCreate(BaseModel):
+    """Request body for creating a route from photo locations. PRD v3 - POST /v1/routes/from-photos."""
+
+    title: str = Field(..., min_length=TITLE_MIN, max_length=TITLE_MAX)
+    description: Optional[str] = None
+    tags: list[str] = Field(default_factory=list, max_length=MAX_TAGS)
+    is_public: bool = False
+    photo_ids: list[UUID] = Field(..., min_length=2, description="Ordered photo UUIDs; route geometry = LineString through these in order")
+    slug: Optional[str] = Field(None, max_length=255)
+
+    @field_validator("tags")
+    @classmethod
+    def tags_normalized(cls, v: list[str]) -> list[str]:
+        """Normalize tag names: strip, lowercase, max 50 chars per tag."""
+        out = []
+        for t in v:
+            name = (t or "").strip().lower()
+            if name:
+                out.append(name[:50])
+        return out[:MAX_TAGS]
+
+
 class RouteUpdate(BaseModel):
     """Partial update body for PATCH."""
 

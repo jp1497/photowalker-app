@@ -1,6 +1,6 @@
 """Integration tests for discovery API (GET /v1/routes browse). Step 5.2."""
 import asyncio
-from typing import Any, List, Optional
+from typing import List, Optional
 from uuid import uuid4
 
 from starlette.testclient import TestClient
@@ -15,8 +15,9 @@ from tests.conftest import _minimal_settings, requires_postgres
 
 async def _create_user_and_token(settings: Settings) -> tuple[User, str]:
     """Create a user in the DB and return (user, access_token)."""
-    from app.db.base import Base
     from sqlalchemy import text
+
+    from app.db.base import Base
 
     uid = uuid4().hex[:8]
     engine = create_engine(settings)

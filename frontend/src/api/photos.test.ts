@@ -64,14 +64,15 @@ describe('photos API', () => {
     );
   });
 
-  it('updatePhoto sends PATCH with location', async () => {
+  it('updatePhoto sends PATCH with location and returns photo from response', async () => {
     const photoId = 'photo-123';
     const location = { type: 'Point' as const, coordinates: [-122.42, 37.78] as [number, number] };
     const updated = { id: photoId, user_id: 'u1', caption: null, location, s3_key_original: '', s3_key_thumbnail: null, file_size_bytes: 1, captured_at: null, created_at: '', updated_at: '' };
-    vi.mocked(apiClient.patch).mockResolvedValue({ data: updated });
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: { photo: updated } });
 
     const result = await updatePhoto(photoId, { location });
 
+    expect(result).toEqual(updated);
     expect(result.location).toEqual(location);
     expect(apiClient.patch).toHaveBeenCalledWith('/v1/photos/photo-123', { location });
   });
