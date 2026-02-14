@@ -18,7 +18,9 @@ export interface MapPickerProps {
 export function MapPicker({ initialCenter = DEFAULT_CENTER, onSelect, style }: MapPickerProps) {
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
 
   const handleMapReady = (map: maplibregl.Map) => {
     map.getContainer().style.cursor = 'crosshair';

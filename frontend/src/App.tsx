@@ -5,7 +5,7 @@ import { Loading } from './components/common/Loading';
 import { Toast } from './components/common/Toast';
 import { AuthCallback } from './pages/AuthCallback';
 import { Browse } from './pages/Browse';
-import { CreateRoute } from './pages/CreateRoute';
+import { CreateRouteFromPhotos } from './pages/CreateRouteFromPhotos';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { MyRoutes } from './pages/MyRoutes';
@@ -65,7 +65,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/routes/me" element={<ProtectedRoute><MyRoutes /></ProtectedRoute>} />
-        <Route path="/routes/create" element={<ProtectedRoute><CreateRoute /></ProtectedRoute>} />
+        <Route path="/routes/create" element={<ProtectedRoute><CreateRouteFromPhotos /></ProtectedRoute>} />
         <Route path="/routes/:slug" element={<RouteDetail />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

@@ -1,5 +1,5 @@
 ---
-description: Frontend Vite/ESM, testing, types, third-party API usage, and map control teardown doctrine
+description: Frontend Vite/ESM, testing, types, third-party API usage, map teardown, protected images, and list resource lifecycle
 globs: frontend/**/*.ts,frontend/**/*.tsx
 alwaysApply: false
 ---
@@ -42,3 +42,13 @@ alwaysApply: false
 ## Types: API Response and Minimal Component Props
 
 - Keep frontend API response types complete relative to the backend schema (all fields the API returns). For components that only need a subset of fields, define a minimal interface as the component's prop type (e.g. `{ id; caption }`) so that both full response types and partial shapes are assignable; this avoids incomplete response types and keeps the backend as the source of truth.
+
+## Protected Image Endpoints
+
+- When displaying images from **authenticated** endpoints (e.g. Bearer token or credentials), a plain `<img src={url}>` does **not** send the app's Authorization header or cookies in a way the backend can use. Requests can 401 and thumbnails fail to load.
+- **Use the app's API client** for image requests: fetch via the same client that attaches auth (e.g. `apiClient.get(url, { responseType: 'blob' })`), then display the result via `URL.createObjectURL(blob)` in an `<img>`, or use a component that does this. Do not rely on raw img `src` for protected image URLs.
+
+## Ephemeral Resources in Reorderable or Dynamic Lists
+
+- When list items display **ephemeral resources** that are created in component code and revoked on unmount (e.g. blob **object URLs** from `URL.createObjectURL`), and the list can **reorder** or filter so that items unmount/remount, the resource can be revoked while still needed (e.g. thumbnails disappear after drag).
+- **Lift the resource cache to a parent** that does not unmount when the list reorders: e.g. page-level state keyed by a **stable id** (e.g. `Record<itemId, objectUrl>`). Child components fetch once and report the URL to the parent; subsequent renders use the cached URL from parent state. Revoke only when the item is removed from the list or the page unmounts. This keeps ownership and lifetime aligned with the interaction (reorder = same items, same cache).

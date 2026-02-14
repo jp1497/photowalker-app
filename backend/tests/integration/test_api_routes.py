@@ -11,12 +11,15 @@ from app.db.session import create_engine, create_session_factory
 from app.models.user import User
 from app.services.auth_service import issue_tokens
 from tests.conftest import _minimal_settings, requires_postgres
+from tests.integration.test_api_photos import MINIMAL_JPEG, _photo_settings
 
 
 async def _create_user_and_token(settings: Settings) -> tuple[User, str]:
     """Create a user in the DB and return (user, access_token). Uses same DATABASE_URL as app."""
-    from app.db.base import Base
     from sqlalchemy import text
+
+    from app.db.base import Base
+
     uid = uuid4().hex[:8]
     engine = create_engine(settings)
     async with engine.begin() as conn:
@@ -296,5 +299,146 @@ def test_post_routes_invalid_geometry_returns_400() -> None:
             )
         assert response.status_code == 400
         assert "error" in response.json()
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_post_routes_from_photos_with_valid_data_returns_201() -> None:
+    """POST /v1/routes/from-photos with valid data returns 201 (UAT-FR-R1.1)."""
+    from unittest.mock import patch
+    settings = _photo_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        user, token = _create_user_and_token_sync(settings)
+        with TestClient(app) as client:
+            # Different coordinates per photo so route distance > 0
+            with patch(
+                "app.services.photo_service.extract_gps",
+                side_effect=[(37.8, -122.4), (37.81, -122.41)],
+            ):
+                with patch("app.services.photo_service.extract_captured_at", return_value=None):
+                    up1 = client.post(
+                        "/v1/photos",
+                        headers={"Authorization": f"Bearer {token}"},
+                        files={"file": ("p1.jpg", MINIMAL_JPEG, "image/jpeg")},
+                        data={"route_ids": "[]"},
+                    )
+                    up2 = client.post(
+                        "/v1/photos",
+                        headers={"Authorization": f"Bearer {token}"},
+                        files={"file": ("p2.jpg", MINIMAL_JPEG, "image/jpeg")},
+                        data={"route_ids": "[]"},
+                    )
+            assert up1.status_code == 201 and up2.status_code == 201
+            id1 = up1.json()["photo"]["id"]
+            id2 = up2.json()["photo"]["id"]
+            response = client.post(
+                "/v1/routes/from-photos",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "title": "Route From Photos",
+                    "description": None,
+                    "tags": [],
+                    "is_public": False,
+                    "photo_ids": [id1, id2],
+                },
+            )
+        assert response.status_code == 201
+        data = response.json()
+        assert "route" in data
+        route = data["route"]
+        assert route["title"] == "Route From Photos"
+        assert "slug" in route
+        assert route["distance_meters"] > 0
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_post_routes_from_photos_with_photo_missing_location_returns_400() -> None:
+    """POST /v1/routes/from-photos with photo missing location returns 400."""
+    from unittest.mock import patch
+    settings = _photo_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        user, token = _create_user_and_token_sync(settings)
+        with TestClient(app) as client:
+            with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
+                with patch("app.services.photo_service.extract_captured_at", return_value=None):
+                    up1 = client.post(
+                        "/v1/photos",
+                        headers={"Authorization": f"Bearer {token}"},
+                        files={"file": ("p1.jpg", MINIMAL_JPEG, "image/jpeg")},
+                        data={"route_ids": "[]"},
+                    )
+            assert up1.status_code == 201
+            id1 = up1.json()["photo"]["id"]
+            up2 = client.post(
+                "/v1/photos",
+                headers={"Authorization": f"Bearer {token}"},
+                files={"file": ("p2.jpg", MINIMAL_JPEG, "image/jpeg")},
+                data={"route_ids": "[]"},
+            )
+            assert up2.status_code == 201
+            id2 = up2.json()["photo"]["id"]
+            response = client.post(
+                "/v1/routes/from-photos",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "title": "Route From Photos",
+                    "description": None,
+                    "tags": [],
+                    "is_public": False,
+                    "photo_ids": [id1, id2],
+                },
+            )
+        assert response.status_code == 400
+        body = response.json()
+        assert "error" in body
+        msg = body["error"].get("message", "")
+        assert "location" in msg.lower()
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_post_routes_from_photos_with_fewer_than_two_photos_returns_400() -> None:
+    """POST /v1/routes/from-photos with <2 photos returns 400 (body validation).
+
+    This app maps RequestValidationError to 400 in error_handler, not 422.
+    """
+    from unittest.mock import patch
+    settings = _photo_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        user, token = _create_user_and_token_sync(settings)
+        with TestClient(app) as client:
+            with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
+                with patch("app.services.photo_service.extract_captured_at", return_value=None):
+                    up1 = client.post(
+                        "/v1/photos",
+                        headers={"Authorization": f"Bearer {token}"},
+                        files={"file": ("p1.jpg", MINIMAL_JPEG, "image/jpeg")},
+                        data={"route_ids": "[]"},
+                    )
+            assert up1.status_code == 201
+            id1 = up1.json()["photo"]["id"]
+            response = client.post(
+                "/v1/routes/from-photos",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "title": "Route From Photos",
+                    "description": None,
+                    "tags": [],
+                    "is_public": False,
+                    "photo_ids": [id1],
+                },
+            )
+        assert response.status_code == 400
+        assert response.json().get("error", {}).get("code") == "VALIDATION_ERROR"
     finally:
         app.dependency_overrides.pop(get_settings, None)

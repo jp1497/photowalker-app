@@ -142,7 +142,7 @@ async def _check_limits(
             )
             if not allowed:
                 return False, retry
-        if method == "POST" and path.rstrip("/") == "/v1/routes":
+        if method == "POST" and path.rstrip("/") in ("/v1/routes", "/v1/routes/from-photos"):
             # In development with E2E configured, skip route-creation limit so E2E tests don't hit 429
             if settings.environment != "development" or not settings.e2e_test_secret:
                 route_key = f"user:{user_id}:route:{hour_bucket}"

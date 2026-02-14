@@ -10,6 +10,8 @@ alwaysApply: false
 
 When configuring healthchecks, OpenAPI, or integration points, **verify paths and contracts against the actual code**. Do not assume from PRD, spec, or documentation.
 
+- **Validation error status:** This project maps request body validation (e.g. FastAPI `RequestValidationError`) to **400 Bad Request**, not 422. Integration tests and API docs should expect 400 for validation failures.
+
 - Health endpoint: Grep for the router path (e.g. `/health` vs `/v1/health`) in the API modules
 - OpenAPI: The live spec at `/openapi.json` when the app runs is canonical; static specs can drift
 - Docker healthcheck: Use the path that exists in the app; prefer stdlib (e.g. `urllib.request`) over external tools (curl) in slim images
@@ -34,3 +36,19 @@ Scripts that `import app` (or equivalent) trigger full app bootstrap: Settings v
 - **(b) Minimal env stubs:** Set required env vars in the script before any app import
 
 Document which is required. If the script uses stubs, set them at the top before importing. If it requires full env, state that clearly in the script docstring and in README/CONTRIBUTING.
+
+## Service vs Schema Validation in Tests
+
+When the **service layer** enforces a rule that the **request schema** also enforces (e.g. "at least 2 items"), a normal request will fail schema validation (e.g. 400/422) before the service runs. To test that the service correctly rejects the case too (and returns the right error), bypass schema validation for that test: e.g. use Pydantic's `Model.model_construct(...)` to build the payload so the service receives it and its validation runs. This keeps service-level error messages and behavior under test.
+
+## ORM Ordered Relationships After Mutations
+
+After **in-process mutations** to an ordered relationship (e.g. reordering or deleting child rows and flushing in the same session), the parent's relationship collection (e.g. `route.route_photos`) can be **stale**: it may still reflect the pre-mutation order or set. Do not rely on it for "current order." Use an **explicit query** that selects the children with the appropriate `order_by` (and options like `selectinload` if you need related data), and use that result for recomputation or serialization. This applies whenever you need the authoritative order after reorder/delete in the same request or test.
+
+## Integration Tests and Service Invariants
+
+When a **service** enforces invariants (e.g. "route distance must be > 0" or "photos must not all be at the same point"), **integration tests** that hit that code path must supply data that satisfies those invariants. For example, if the service builds a route from two photo locations, use two distinct coordinates (e.g. different lat/lng per photo) so the computed distance is non-zero. Mock or fixture data that violates the invariant will cause the service to raise and the test to fail even when the API contract is correct.
+
+## Geometry and Serialization in Tests
+
+When asserting on GeoJSON coordinates from geometry (e.g. Shapely `mapping(to_shape(geom))` or similar), the serialized coordinates may be **tuples**, not lists. Tests that compare to list literals (e.g. `assert coords[0] == [-122.4, 37.8]`) can fail due to type mismatch. Use `list(geom["coordinates"][i])` in the assertion, or assert tuple equality, so the comparison is consistent with the actual serialized type.
