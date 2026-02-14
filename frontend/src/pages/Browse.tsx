@@ -228,12 +228,14 @@ export function Browse() {
 
   useEffect(() => {
     if (viewMode !== 'map' || !debouncedMapBbox) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on view/bbox change
     fetchMap(debouncedMapBbox);
   }, [viewMode, debouncedMapBbox, fetchMap]);
 
   useEffect(() => {
     if (viewMode === 'list') {
       listPage.current = 1;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch list on view change
       fetchList();
     }
   }, [viewMode, fetchList]);

@@ -5,14 +5,14 @@ from unittest.mock import MagicMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from app.core.config import Settings
 from app.middleware.rate_limit import (
-    RateLimitMiddleware,
     SKIP_PATHS,
+    RateLimitMiddleware,
     _client_ip,
 )
-from starlette.requests import Request
 
 
 def _minimal_settings(**overrides: object) -> Settings:

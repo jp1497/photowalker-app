@@ -14,6 +14,7 @@ export function MyRoutes() {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset then fetch on mount/retry
     setLoading(true);
     setError(null);
     getMyRoutes()

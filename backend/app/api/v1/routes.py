@@ -13,7 +13,7 @@ from app.core.exceptions import RouteForbiddenError, RouteNotFoundError
 from app.db.dependencies import get_db
 from app.models.user import User
 from app.schemas.photo import PhotoResponse
-from app.schemas.route import RouteCreate, RouteResponse, RouteUpdate
+from app.schemas.route import RouteCreate, RouteFromPhotosCreate, RouteResponse, RouteUpdate
 from app.services import photo_service, route_service
 
 router = APIRouter(prefix="/v1/routes", tags=["routes"])
@@ -35,6 +35,29 @@ async def create_route(
     """Create a route. Auth required."""
     try:
         route = await route_service.create_route(db, current_user.id, body)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": str(e),
+                "details": None,
+            },
+        )
+    payload = {"route": RouteResponse.model_validate(route).model_dump(mode="json", by_alias=True)}
+    await db.commit()
+    return payload
+
+
+@router.post("/from-photos", status_code=status.HTTP_201_CREATED)
+async def create_route_from_photos(
+    body: RouteFromPhotosCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_required),
+) -> dict:
+    """Create a route from ordered photo locations. PRD v3 - FR-R1. Auth required."""
+    try:
+        route = await route_service.create_route_from_photos(db, current_user.id, body)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

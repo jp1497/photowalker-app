@@ -26,6 +26,7 @@ export function PhotoGallery({ photos, selectedPhotoId = null, onSelectPhoto, is
   const effectiveSelectedIndex = selectedIndex >= 0 ? selectedIndex : null;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync modal to selected photo from map
     if (effectiveSelectedIndex != null) setModalIndex(effectiveSelectedIndex);
   }, [effectiveSelectedIndex]);
 

@@ -60,8 +60,11 @@ export async function fetchPhotoImageBlob(photoId: string, size: 'thumbnail' | '
   return response.data as Blob;
 }
 
-/** Update photo (PATCH). Returns updated photo. */
+/** Update photo (PATCH). Returns updated photo. API response shape is { photo: Photo }. */
 export async function updatePhoto(photoId: string, body: PhotoUpdateBody): Promise<Photo> {
-  const { data } = await apiClient.patch<Photo>(`/v1/photos/${encodeURIComponent(photoId)}`, body);
-  return data;
+  const { data } = await apiClient.patch<{ photo: Photo }>(
+    `/v1/photos/${encodeURIComponent(photoId)}`,
+    body
+  );
+  return data.photo;
 }

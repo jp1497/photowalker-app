@@ -59,7 +59,6 @@ export function RouteDetail() {
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount: reset then load
     setLoading(true);
     setError(null);
     getRouteBySlug(slug)
