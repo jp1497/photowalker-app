@@ -4,7 +4,9 @@ import type { ReactNode } from 'react';
 const DEFAULT_HEIGHT = 320;
 
 export interface MapPanelProps {
-  /** Height in pixels. Default 320 to match route detail and browse. */
+  /** When true, container fills parent (height 100%); parent must provide height. */
+  fill?: boolean;
+  /** Height in pixels when fill is false. Default 320. */
   height?: number;
   /** Message or content shown above the map (e.g. loading, "zoom in"). */
   overlay?: ReactNode;
@@ -12,14 +14,14 @@ export interface MapPanelProps {
   children: ReactNode;
 }
 
-export function MapPanel({ height = DEFAULT_HEIGHT, overlay, children }: MapPanelProps) {
+export function MapPanel({ fill = false, height = DEFAULT_HEIGHT, overlay, children }: MapPanelProps) {
   return (
     <div
       style={{
         position: 'relative',
-        height,
-        border: '1px solid #ccc',
-        borderRadius: 4,
+        ...(fill ? { height: '100%', minHeight: 0 } : { height }),
+        border: fill ? undefined : '1px solid #ccc',
+        borderRadius: fill ? 0 : 4,
         overflow: 'hidden',
       }}
     >
