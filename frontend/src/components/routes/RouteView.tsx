@@ -21,8 +21,8 @@ export interface RouteViewProps {
   photos: RoutePhoto[];
   /** Highlight this photo pin on the map. */
   selectedPhotoId?: string | null;
-  /** Called when a photo pin is clicked. */
-  onSelectPhoto?: (photoId: string) => void;
+  /** Called when a photo pin is clicked. Pass null to clear selection. */
+  onSelectPhoto?: (photoId: string | null) => void;
 }
 
 const ROUTE_SOURCE_ID = 'route-line';
@@ -38,6 +38,13 @@ const PIN_BORDER_WIDTH = 2;
 const CLUSTER_STACK_SIZE = 44;
 const CLUSTER_STACK_OFFSET = 5;
 const CLUSTER_STACK_MAX_IMAGES = 5;
+
+function pointCoordinates(geom: GeoJSON.Geometry): [number, number] | null {
+  if (geom.type === 'Point' && geom.coordinates && geom.coordinates.length >= 2) {
+    return [geom.coordinates[0], geom.coordinates[1]];
+  }
+  return null;
+}
 
 function getBoundsFromCoords(coords: [number, number][]): [[number, number], [number, number]] {
   if (coords.length === 0) return [[-122.42, 37.78], [-122.4, 37.8]];
@@ -261,24 +268,18 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
         : () => Promise.resolve<GeoJSON.Feature<GeoJSON.Point>[]>([]);
 
     const clusterFeatures = map.queryRenderedFeatures({ layers: [CLUSTER_LAYER_ID] });
-    const centerCoords = (geom: GeoJSON.Geometry): [number, number] | null => {
-      if (geom.type === 'Point' && geom.coordinates && geom.coordinates.length >= 2) {
-        return [geom.coordinates[0], geom.coordinates[1]];
-      }
-      return null;
-    };
     const dist2 = (a: [number, number], b: [number, number]) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
 
     clusterFeatures.forEach((feature) => {
       const clusterId = feature.properties?.cluster_id as number | undefined;
-      const center = centerCoords(feature.geometry as GeoJSON.Point);
+      const center = pointCoordinates(feature.geometry as GeoJSON.Point);
       if (clusterId == null || !center) return;
 
       getLeaves(clusterId).then((leaves) => {
         if (!map.getSource(PHOTOS_SOURCE_ID)) return;
         const withCoords = leaves
           .map((f) => {
-            const c = centerCoords(f.geometry);
+            const c = pointCoordinates(f.geometry as GeoJSON.Point);
             const id = (f.properties as { photoId?: string })?.photoId;
             return c && id ? { photoId: id, coords: c } : null;
           })
@@ -287,6 +288,10 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
         const photoIds = withCoords.map((x) => x.photoId);
 
         const el = createClusterStackElement(photoIds, thumbnailUrlsRef.current, () => {
+          onSelectPhoto?.(null);
+          if (map.getLayer(UNCLUSTERED_SELECTED_LAYER_ID)) {
+            map.setFilter(UNCLUSTERED_SELECTED_LAYER_ID, ['literal', false]);
+          }
           Promise.resolve(source.getClusterExpansionZoom(clusterId)).then((zoom) => {
             map.easeTo({ center, zoom, duration: 300 });
           });
@@ -365,7 +370,9 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
         id: UNCLUSTERED_SELECTED_LAYER_ID,
         type: 'circle',
         source: PHOTOS_SOURCE_ID,
-        filter: ['!', ['has', 'point_count']],
+        filter: selectedPhotoId
+          ? ['all', ['!', ['has', 'point_count']], ['==', ['get', 'photoId'], selectedPhotoId]]
+          : ['literal', false],
         paint: {
           'circle-radius': PIN_ICON_SIZE / 2,
           'circle-color': 'transparent',
@@ -378,10 +385,15 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
         if (!feature?.properties?.cluster_id) return;
         const source = map.getSource(PHOTOS_SOURCE_ID) as maplibregl.GeoJSONSource;
         if (!source?.getClusterExpansionZoom) return;
+        onSelectPhoto?.(null);
+        if (map.getLayer(UNCLUSTERED_SELECTED_LAYER_ID)) {
+          map.setFilter(UNCLUSTERED_SELECTED_LAYER_ID, ['literal', false]);
+        }
         const clusterId = feature.properties.cluster_id;
         Promise.resolve(source.getClusterExpansionZoom(clusterId)).then((zoom) => {
           const geometry = feature.geometry as GeoJSON.Point;
-          map.easeTo({ center: geometry.coordinates as [number, number], zoom, duration: 300 });
+          const center = pointCoordinates(geometry);
+          if (center) map.easeTo({ center, zoom, duration: 300 });
         });
       });
 
@@ -420,7 +432,11 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
     const map = mapRef.current;
     if (!map || !map.getLayer(UNCLUSTERED_SELECTED_LAYER_ID)) return;
     if (selectedPhotoId) {
-      map.setFilter(UNCLUSTERED_SELECTED_LAYER_ID, ['==', ['get', 'photoId'], selectedPhotoId]);
+      map.setFilter(UNCLUSTERED_SELECTED_LAYER_ID, [
+        'all',
+        ['!', ['has', 'point_count']],
+        ['==', ['get', 'photoId'], selectedPhotoId],
+      ]);
     } else {
       map.setFilter(UNCLUSTERED_SELECTED_LAYER_ID, ['literal', false]);
     }
