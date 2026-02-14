@@ -35,7 +35,7 @@ export function RouteDetail() {
     } else {
       setEditLocationCoords(null);
     }
-  }, [editingPhotoId, data?.photos]);
+  }, [editingPhotoId, data]);
 
   const retry = useCallback(() => {
     if (!slug) return;

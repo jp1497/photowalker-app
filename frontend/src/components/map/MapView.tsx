@@ -18,6 +18,10 @@ export function MapView({ center = DEFAULT_CENTER, zoom = DEFAULT_ZOOM, style, o
   const mapRef = useRef<maplibregl.Map | null>(null);
   const initialCenterRef = useRef(center);
   const initialZoomRef = useRef(zoom);
+  const onMapReadyRef = useRef(onMapReady);
+  useEffect(() => {
+    onMapReadyRef.current = onMapReady;
+  }, [onMapReady]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -48,7 +52,7 @@ export function MapView({ center = DEFAULT_CENTER, zoom = DEFAULT_ZOOM, style, o
     });
     mapRef.current = map;
     map.on('load', () => {
-      onMapReady?.(map);
+      onMapReadyRef.current?.(map);
     });
     return () => {
       try {
@@ -60,11 +64,13 @@ export function MapView({ center = DEFAULT_CENTER, zoom = DEFAULT_ZOOM, style, o
     };
   }, []);
 
+  const centerLng = center[0];
+  const centerLat = center[1];
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.getCenter) return;
-    map.jumpTo({ center, zoom });
-  }, [center[0], center[1], zoom]);
+    map.jumpTo({ center: [centerLng, centerLat], zoom });
+  }, [centerLng, centerLat, zoom]);
 
   return <div ref={containerRef} className="map-container" style={{ width: '100%', height: '100%', ...style }} />;
 }
