@@ -5,6 +5,7 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import maplibregl from 'maplibre-gl';
 import { getBrowseRoutes } from '../api/routes';
 import { fetchPhotoImageBlob } from '../api/photos';
+import { MapPanel } from '../components/map/MapPanel';
 import { MapView } from '../components/map/MapView';
 import { RouteList } from '../components/routes/RouteList';
 import {
@@ -517,30 +518,22 @@ export function Browse() {
       </div>
 
       {viewMode === 'map' && (
-        <div style={{ height: 480, position: 'relative' }}>
+        <MapPanel
+          overlay={
+            loading || bboxTooLarge
+              ? loading
+                ? 'Loading routes…'
+                : 'Zoom in to see routes in this area'
+              : undefined
+          }
+        >
           <MapView
             center={mapCenter}
             zoom={mapZoom}
             style={{ width: '100%', height: '100%' }}
             onMapReady={handleMapReady}
           />
-          {(loading || bboxTooLarge) && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '0.5rem',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                padding: '0.25rem 0.5rem',
-                background: 'rgba(255,255,255,0.9)',
-                borderRadius: '4px',
-                fontSize: '0.875rem',
-              }}
-            >
-              {loading ? 'Loading routes…' : 'Zoom in to see routes in this area'}
-            </div>
-          )}
-        </div>
+        </MapPanel>
       )}
 
       {viewMode === 'list' && (

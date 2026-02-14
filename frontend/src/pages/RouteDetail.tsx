@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { updatePhoto } from '../api/photos';
 import { getRouteBySlug } from '../api/routes';
 import { Loading } from '../components/common/Loading';
+import { MapPanel } from '../components/map/MapPanel';
 import { MapPicker } from '../components/map/MapPicker';
 import { RouteView } from '../components/routes/RouteView';
 import { PhotoGallery } from '../components/photos/PhotoGallery';
@@ -184,13 +185,13 @@ export function RouteDetail() {
             <p style={{ margin: 0, fontSize: '0.875rem', color: '#666' }}>
               Click the map to set the photo&apos;s location, then Save.
             </p>
-            <div style={{ height: 320, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden' }}>
+            <MapPanel>
               <MapPicker
                 initialCenter={editMapCenter}
                 onSelect={setEditLocationCoords}
                 style={{ height: '100%' }}
               />
-            </div>
+            </MapPanel>
             {editLocationCoords && (
               <p style={{ margin: 0, fontSize: '0.875rem', fontFamily: 'monospace' }}>
                 Selected: [{editLocationCoords[0].toFixed(5)}, {editLocationCoords[1].toFixed(5)}]

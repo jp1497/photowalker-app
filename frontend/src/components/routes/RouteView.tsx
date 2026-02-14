@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import { fetchPhotoImageBlob } from '../../api/photos';
+import { MapPanel } from '../map/MapPanel';
 import { MapView } from '../map/MapView';
 import {
   createDefaultPinImageData,
@@ -421,9 +422,9 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div style={{ height: 320, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden' }}>
+      <MapPanel>
         <MapView onMapReady={handleMapReady} style={{ width: '100%', height: '100%' }} />
-      </div>
+      </MapPanel>
       <section data-testid="route-detail-content">
         <h1 data-testid="route-detail-title" style={{ margin: 0, fontSize: '1.75rem' }}>{route.title}</h1>
         {route.description && (
