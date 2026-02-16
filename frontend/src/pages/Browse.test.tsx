@@ -41,6 +41,9 @@ vi.mock('../components/map/MapView', () => ({
     return <div data-testid="map-view">Map</div>;
   },
 }));
+vi.mock('../contexts/MapContext', () => ({
+  useMapContext: vi.fn(() => null),
+}));
 vi.mock('maplibre-gl', () => ({
   default: {
     Marker: vi.fn().mockImplementation(() => ({
@@ -123,5 +126,30 @@ describe('Browse', () => {
     });
     expect(screen.getByText(/Page 1 of 2/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /next/i })).toBeTruthy();
+  });
+
+  it('shell mode: Filters and List open overlays; list overlay shows RouteList', async () => {
+    const { useMapContext } = await import('../contexts/MapContext');
+    vi.mocked(useMapContext).mockReturnValue({ map: null, onMapReady: vi.fn() });
+
+    vi.mocked(routesApi.getBrowseRoutes).mockResolvedValue({
+      routes: mockRoutes,
+      pagination: { page: 1, per_page: 20, total: 1 },
+    });
+
+    render(
+      <MemoryRouter>
+        <Browse />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('button', { name: /open filters/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /open routes/i })).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: /open routes/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: /routes list/i })).toBeTruthy();
+    });
+    expect(screen.getByText('Urban Walk')).toBeTruthy();
   });
 });

@@ -9,6 +9,8 @@ export interface RouteListProps {
   pagination: { page: number; per_page: number; total: number };
   loading?: boolean;
   onPageChange: (page: number) => void;
+  /** When set, called on route click instead of navigating (e.g. to close overlay then navigate). */
+  onRouteClick?: (slug: string) => void;
 }
 
 function formatDate(iso: string): string {
@@ -23,7 +25,7 @@ function formatDate(iso: string): string {
   }
 }
 
-export function RouteList({ routes, pagination, loading, onPageChange }: RouteListProps) {
+export function RouteList({ routes, pagination, loading, onPageChange, onRouteClick }: RouteListProps) {
   const navigate = useNavigate();
   const { page, per_page, total } = pagination;
   const totalPages = Math.max(1, Math.ceil(total / per_page));
@@ -31,7 +33,11 @@ export function RouteList({ routes, pagination, loading, onPageChange }: RouteLi
   const hasNext = page < totalPages;
 
   const handleRouteClick = (slug: string) => {
-    navigate(`/routes/${slug}`);
+    if (onRouteClick) {
+      onRouteClick(slug);
+    } else {
+      navigate(`/routes/${slug}`);
+    }
   };
 
   if (loading) {

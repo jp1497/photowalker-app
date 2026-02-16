@@ -130,6 +130,8 @@ export function Browse() {
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const thumbnailUrlsRef = useRef<Record<string, string>>({});
   const listPage = useRef(1);
+  const [filtersOverlayOpen, setFiltersOverlayOpen] = useState(false);
+  const [listOverlayOpen, setListOverlayOpen] = useState(true);
 
   const routesWithPhoto = useMemo(
     () => routes.filter((r) => r.first_photo_id),
@@ -226,17 +228,24 @@ export function Browse() {
 
   useEffect(() => {
     if (viewMode !== 'map' || !debouncedMapBbox) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on view/bbox change
     fetchMap(debouncedMapBbox);
   }, [viewMode, debouncedMapBbox, fetchMap]);
 
   useEffect(() => {
     if (viewMode === 'list') {
       listPage.current = 1;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch list on view change
       fetchList();
     }
   }, [viewMode, fetchList]);
+
+  useEffect(() => {
+    if (!mapContext || !listOverlayOpen) return;
+    listPage.current = 1;
+    const id = setTimeout(() => fetchList(), 0);
+    return () => clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch on mount when list open; fetchList would cause refetch on every tags change
+  }, [mapContext, listOverlayOpen]);
+
 
   const addImagesToMap = useCallback((map: MapLibreMap) => {
     const defaultPin = createDefaultPinImageData();
@@ -480,154 +489,278 @@ export function Browse() {
   }, [tagsFilter]);
 
   const handleApplyTags = useCallback(() => {
-    if (viewMode === 'list') fetchList();
-    else if (mapRef.current && mapBbox) fetchMap(mapBbox);
-  }, [viewMode, fetchList, mapBbox, fetchMap]);
+    if (mapRef.current && mapBbox) fetchMap(mapBbox);
+    if (viewMode === 'list' || listOverlayOpen) fetchList();
+  }, [viewMode, listOverlayOpen, fetchList, mapBbox, fetchMap]);
 
   const isShellMap = !!mapContext;
   const overlayMessage =
-    viewMode === 'map' && (loading || bboxTooLarge)
+    (loading || bboxTooLarge)
       ? loading
         ? 'Loading routes…'
         : 'Zoom in to see routes in this area'
       : undefined;
 
-  const bar = (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '1rem',
-        flexWrap: 'wrap',
-        ...(isShellMap
-          ? {
-              position: 'absolute' as const,
-              top: '3.5rem',
-              left: '0.75rem',
-              zIndex: 100,
-              background: 'rgba(255,255,255,0.95)',
-              padding: '0.5rem 0.75rem',
-              borderRadius: 8,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-              pointerEvents: 'auto' as const,
-            }
-          : { marginBottom: '0.5rem' }),
-      }}
-    >
-      <div style={{ display: 'flex', gap: '0.25rem' }}>
-        <button
-          type="button"
-          onClick={() => setViewMode('map')}
-          style={{
-            padding: '0.5rem 0.75rem',
-            fontWeight: viewMode === 'map' ? 'bold' : 'normal',
-            background: viewMode === 'map' ? '#e5e7eb' : 'transparent',
-            border: '1px solid #d1d5db',
-            borderRadius: '4px',
-          }}
-        >
-          Map
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode('list')}
-          style={{
-            padding: '0.5rem 0.75rem',
-            fontWeight: viewMode === 'list' ? 'bold' : 'normal',
-            background: viewMode === 'list' ? '#e5e7eb' : 'transparent',
-            border: '1px solid #d1d5db',
-            borderRadius: '4px',
-          }}
-        >
-          List
-        </button>
-      </div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <span style={{ fontSize: '0.875rem' }}>Tags:</span>
-        <input
-          type="text"
-          value={tagsFilter}
-          onChange={(e) => setTagsFilter(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleApplyTags()}
-          placeholder="e.g. urban, night"
-          style={{ padding: '0.35rem 0.5rem', width: '160px', border: '1px solid #d1d5db', borderRadius: '4px' }}
-        />
-        <button type="button" onClick={handleApplyTags} style={{ padding: '0.35rem 0.5rem' }}>
-          Apply
-        </button>
-      </label>
-    </div>
-  );
+  useEffect(() => {
+    if (!isShellMap) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setFiltersOverlayOpen(false);
+        setListOverlayOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isShellMap]);
+
+  const handleListRouteClick = useCallback((slug: string) => {
+    setListOverlayOpen(false);
+    navigate(`/routes/${slug}`);
+  }, [navigate]);
+
+  const floatingButtonStyle = {
+    position: 'absolute' as const,
+    zIndex: 100,
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.875rem',
+    border: '1px solid #d1d5db',
+    borderRadius: 6,
+    background: 'rgba(255,255,255,0.95)',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    cursor: 'pointer' as const,
+    pointerEvents: 'auto' as const,
+  };
 
   return (
     <div
       style={
         isShellMap
-          ? { position: 'absolute', inset: 0, pointerEvents: 'none' }
+          ? { position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }
           : { padding: '1rem', display: 'flex', flexDirection: 'column' }
       }
     >
-      {bar}
+      {isShellMap ? (
+        <>
+          <div style={{ position: 'absolute', top: '3.5rem', left: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem', pointerEvents: 'auto', zIndex: 500 }}>
+            <button
+              type="button"
+              onClick={() => setFiltersOverlayOpen(true)}
+              style={{ ...floatingButtonStyle, flexShrink: 0 }}
+              aria-label="Open filters"
+            >
+              Filters
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                listPage.current = 1;
+                fetchList();
+                setListOverlayOpen(true);
+              }}
+              style={{ ...floatingButtonStyle, flexShrink: 0 }}
+              aria-label="Open routes"
+            >
+              Routes
+            </button>
+          </div>
 
-      {viewMode === 'map' && !isShellMap && (
-        <MapPanel overlay={overlayMessage}>
-          <MapView
-            center={mapCenter}
-            zoom={mapZoom}
-            style={{ width: '100%', height: '100%' }}
-            onMapReady={handleMapReady}
-          />
-        </MapPanel>
-      )}
-
-      {viewMode === 'map' && isShellMap && overlayMessage && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '5rem',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            padding: '0.25rem 0.5rem',
-            background: 'rgba(255,255,255,0.9)',
-            borderRadius: 4,
-            fontSize: '0.875rem',
-            pointerEvents: 'auto',
-            zIndex: 100,
-          }}
-        >
-          {overlayMessage}
-        </div>
-      )}
-
-      {viewMode === 'list' && (
-        <div
-          style={{
-            flex: isShellMap ? undefined : 1,
-            minHeight: isShellMap ? undefined : 200,
-            overflow: 'hidden',
-            ...(isShellMap
-              ? {
+          {filtersOverlayOpen && (
+            <>
+              <div
+                role="presentation"
+                aria-hidden="true"
+                style={{ position: 'absolute', inset: 0, zIndex: 301, background: 'rgba(0,0,0,0.3)', pointerEvents: 'auto' }}
+                onClick={() => setFiltersOverlayOpen(false)}
+              />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Filter by tags"
+                style={{
                   position: 'absolute',
                   top: '5rem',
                   left: '0.75rem',
+                  zIndex: 302,
+                  minWidth: 260,
+                  padding: '1rem',
+                  background: '#fff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 8,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  pointerEvents: 'auto',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '1rem' }}>Filters</h3>
+                  <button type="button" onClick={() => setFiltersOverlayOpen(false)} aria-label="Close">×</button>
+                </div>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.75rem' }}>
+                  <span style={{ fontSize: '0.875rem' }}>Tags</span>
+                  <input
+                    type="text"
+                    value={tagsFilter}
+                    onChange={(e) => setTagsFilter(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (handleApplyTags(), setFiltersOverlayOpen(false))}
+                    placeholder="e.g. urban, night"
+                    style={{ padding: '0.35rem 0.5rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                  />
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button type="button" onClick={() => setFiltersOverlayOpen(false)}>Cancel</button>
+                  <button
+                    type="button"
+                    onClick={() => { handleApplyTags(); setFiltersOverlayOpen(false); }}
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {listOverlayOpen && (
+            <>
+              <div
+                role="presentation"
+                aria-hidden="true"
+                style={{ position: 'absolute', inset: 0, zIndex: 201, background: 'rgba(0,0,0,0.3)', pointerEvents: 'auto' }}
+                onClick={() => setListOverlayOpen(false)}
+              />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Routes list"
+                style={{
+                  position: 'absolute',
+                  top: '3.5rem',
+                  left: '0.75rem',
                   right: '0.75rem',
                   bottom: '0.75rem',
-                  background: 'rgba(255,255,255,0.98)',
+                  maxWidth: 400,
+                  maxHeight: 'calc(100vh - 5rem)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  background: '#fff',
+                  border: '1px solid #e5e7eb',
                   borderRadius: 8,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                   pointerEvents: 'auto',
-                  zIndex: 100,
-                }
-              : {}),
-          }}
-        >
-          <RouteList
-            routes={routes}
-            pagination={pagination}
-            loading={loading}
-            onPageChange={handleListPageChange}
-          />
-        </div>
+                  zIndex: 202,
+                  overflow: 'hidden',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderBottom: '1px solid #e5e7eb', gap: '0.5rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '1rem' }}>Routes</h3>
+                  <div style={{ display: 'flex', gap: '0.25rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setFiltersOverlayOpen(true)}
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.8125rem', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', cursor: 'pointer' }}
+                    >
+                      Filters
+                    </button>
+                    <button type="button" onClick={() => setListOverlayOpen(false)} aria-label="Close">×</button>
+                  </div>
+                </div>
+                <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+                  <RouteList
+                    routes={routes}
+                    pagination={pagination}
+                    loading={loading}
+                    onPageChange={handleListPageChange}
+                    onRouteClick={handleListRouteClick}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {overlayMessage && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '5rem',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                padding: '0.25rem 0.5rem',
+                background: 'rgba(255,255,255,0.9)',
+                borderRadius: 4,
+                fontSize: '0.875rem',
+                pointerEvents: 'auto',
+                zIndex: 100,
+              }}
+            >
+              {overlayMessage}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '0.25rem' }}>
+              <button
+                type="button"
+                onClick={() => setViewMode('map')}
+                style={{
+                  padding: '0.5rem 0.75rem',
+                  fontWeight: viewMode === 'map' ? 'bold' : 'normal',
+                  background: viewMode === 'map' ? '#e5e7eb' : 'transparent',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                }}
+              >
+                Map
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                style={{
+                  padding: '0.5rem 0.75rem',
+                  fontWeight: viewMode === 'list' ? 'bold' : 'normal',
+                  background: viewMode === 'list' ? '#e5e7eb' : 'transparent',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                }}
+              >
+                List
+              </button>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.875rem' }}>Tags:</span>
+              <input
+                type="text"
+                value={tagsFilter}
+                onChange={(e) => setTagsFilter(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleApplyTags()}
+                placeholder="e.g. urban, night"
+                style={{ padding: '0.35rem 0.5rem', width: '160px', border: '1px solid #d1d5db', borderRadius: '4px' }}
+              />
+              <button type="button" onClick={handleApplyTags} style={{ padding: '0.35rem 0.5rem' }}>Apply</button>
+            </label>
+          </div>
+
+          {viewMode === 'map' && (
+            <MapPanel overlay={overlayMessage}>
+              <MapView
+                center={mapCenter}
+                zoom={mapZoom}
+                style={{ width: '100%', height: '100%' }}
+                onMapReady={handleMapReady}
+              />
+            </MapPanel>
+          )}
+
+          {viewMode === 'list' && (
+            <div style={{ flex: 1, minHeight: 200, overflow: 'hidden' }}>
+              <RouteList
+                routes={routes}
+                pagination={pagination}
+                loading={loading}
+                onPageChange={handleListPageChange}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );
