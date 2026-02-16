@@ -3,6 +3,17 @@
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+  min-height: 100%;
+}
+
+/* Full-viewport map shell: no max-width or padding so map can fill screen */
+#root.map-first {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  text-align: left;
 }
 
 .logo {

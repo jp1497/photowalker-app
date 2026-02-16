@@ -1,9 +1,11 @@
 /** Home page: landing, welcome, CTA to browse or create. */
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useMapContext } from '../contexts/MapContext';
 
 export function Home() {
   const { user, isAuthenticated } = useAuth();
+  const mapContext = useMapContext();
 
   return (
     <div
@@ -12,6 +14,18 @@ export function Home() {
         maxWidth: 640,
         margin: '0 auto',
         textAlign: 'center',
+        ...(mapContext
+          ? {
+              position: 'absolute' as const,
+              top: '5rem',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'rgba(255,255,255,0.97)',
+              borderRadius: 12,
+              boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+              zIndex: 100,
+            }
+          : {}),
       }}
     >
       <h1 style={{ fontSize: '2.5rem', marginTop: 0, marginBottom: '0.5rem' }}>Photowalker</h1>

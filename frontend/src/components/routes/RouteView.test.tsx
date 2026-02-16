@@ -1,19 +1,20 @@
 /** Unit tests for RouteView: renders route metadata. */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import type { Route } from '../../types/route';
 import { RouteView } from './RouteView';
 
 vi.mock('maplibre-gl', () => ({ default: {} }));
 vi.mock('../map/MapView', () => ({ MapView: () => <div data-testid="map-view" /> }));
 
-const mockRoute = {
+const mockRoute: Route = {
   id: 'route-1',
   user_id: 'user-1',
   slug: 'test-route',
   title: 'Test Route',
   description: 'A test description',
   route_geometry: {
-    type: 'LineString' as const,
+    type: 'LineString',
     coordinates: [
       [-122.4, 37.78],
       [-122.41, 37.79],

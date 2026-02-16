@@ -7,6 +7,7 @@ import { MapPicker } from '../components/map/MapPicker';
 import { createPhotoMarkerElement } from '../components/map/PhotoMarker';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
+import { useMapContext } from '../contexts/MapContext';
 import { uploadPhoto, updatePhoto, getPhotoImageUrl } from '../api/photos';
 import { apiClient } from '../api/client';
 import { createRouteFromPhotos } from '../api/routes';
@@ -250,6 +251,13 @@ export function CreateRouteFromPhotos() {
     [updateMap]
   );
 
+  const mapContext = useMapContext();
+
+  useEffect(() => {
+    if (!mapContext) return;
+    mapContext.onMapReady(handleMapReady);
+  }, [mapContext, handleMapReady]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (map) updateMap(map);
@@ -257,7 +265,23 @@ export function CreateRouteFromPhotos() {
 
   useEffect(() => {
     return () => {
+      const map = mapRef.current;
+      markersRef.current.forEach((m) => {
+        try {
+          m.remove();
+        } catch {
+          /* ignore */
+        }
+      });
       markersRef.current = [];
+      if (map) {
+        try {
+          if (map.getLayer(ROUTE_PREVIEW_LAYER_ID)) map.removeLayer(ROUTE_PREVIEW_LAYER_ID);
+          if (map.getSource(ROUTE_PREVIEW_SOURCE_ID)) map.removeSource(ROUTE_PREVIEW_SOURCE_ID);
+        } catch {
+          /* defensive teardown */
+        }
+      }
       mapRef.current = null;
     };
   }, []);
@@ -314,9 +338,29 @@ export function CreateRouteFromPhotos() {
   const photosWithoutLocation = photos.filter(
     (p) => !p.location?.coordinates || p.location.coordinates.length < 2
   );
+  const isShellMap = !!mapContext;
 
   return (
-    <div style={{ padding: '2rem', maxWidth: 720, margin: '0 auto' }}>
+    <div
+      style={
+        isShellMap
+          ? {
+              position: 'absolute',
+              top: '3.5rem',
+              left: '0.75rem',
+              right: '0.75rem',
+              maxWidth: 480,
+              maxHeight: 'calc(100vh - 5rem)',
+              overflow: 'auto',
+              background: 'rgba(255,255,255,0.98)',
+              padding: '1rem',
+              borderRadius: 8,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              zIndex: 100,
+            }
+          : { padding: '2rem', maxWidth: 720, margin: '0 auto' }
+      }
+    >
       <h1 data-testid="create-route-from-photos-title">Create route from photos</h1>
       <p style={{ color: '#666', marginBottom: '1.5rem' }}>
         Upload photos, place them on the map if needed, reorder to define the route, then add a title and create.
@@ -441,17 +485,24 @@ export function CreateRouteFromPhotos() {
                 );
               })}
             </ul>
-            <div
-              style={{ height: 280, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden', marginTop: '0.75rem' }}
-              data-testid="create-route-from-photos-map"
-            >
-              <MapView
-                center={mapCenter}
-                zoom={12}
-                onMapReady={handleMapReady}
-                style={{ width: '100%', height: '100%' }}
-              />
-            </div>
+            {!isShellMap && (
+              <div
+                style={{ height: 280, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden', marginTop: '0.75rem' }}
+                data-testid="create-route-from-photos-map"
+              >
+                <MapView
+                  center={mapCenter}
+                  zoom={12}
+                  onMapReady={handleMapReady}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+            )}
+            {isShellMap && (
+              <p style={{ fontSize: '0.875rem', color: '#666', marginTop: '0.5rem' }}>
+                Map is behind this panel. Reorder and place photos; the route preview updates on the map.
+              </p>
+            )}
           </section>
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

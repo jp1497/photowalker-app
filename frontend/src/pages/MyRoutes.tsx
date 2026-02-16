@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getMyRoutes } from '../api/routes';
 import { Loading } from '../components/common/Loading';
+import { useMapContext } from '../contexts/MapContext';
 import type { Route } from '../types/route';
 
 export function MyRoutes() {
@@ -35,9 +36,27 @@ export function MyRoutes() {
     };
   }, [retryCount]);
 
+  const mapContext = useMapContext();
+  const panelStyle = mapContext
+    ? {
+        position: 'absolute' as const,
+        top: '3.5rem',
+        left: '0.75rem',
+        right: '0.75rem',
+        maxWidth: 400,
+        maxHeight: 'calc(100vh - 5rem)',
+        overflow: 'auto' as const,
+        background: 'rgba(255,255,255,0.98)',
+        padding: '1rem',
+        borderRadius: 8,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        zIndex: 100,
+      }
+    : { padding: '2rem' };
+
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
+      <div style={{ ...panelStyle, textAlign: 'center' }}>
         <Loading label="Loading your routes..." />
       </div>
     );
@@ -45,7 +64,7 @@ export function MyRoutes() {
 
   if (error) {
     return (
-      <div style={{ padding: '2rem' }}>
+      <div style={panelStyle}>
         <p style={{ color: '#b91c1c', marginBottom: '1rem' }}>{error}</p>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <button type="button" onClick={() => setRetryCount((c) => c + 1)}>
@@ -58,7 +77,7 @@ export function MyRoutes() {
   }
 
   return (
-    <div style={{ padding: '2rem' }}>
+    <div style={panelStyle}>
       <p style={{ marginBottom: '1rem' }}>
         <Link to="/">Home</Link> / <Link to="/routes/create">Create route</Link>
       </p>

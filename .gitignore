@@ -54,3 +54,6 @@ coverage/
 
 # Build outputs
 frontend/dist/
+
+# Local uploads
+backend/local_uploads/

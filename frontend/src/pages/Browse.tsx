@@ -8,6 +8,7 @@ import { fetchPhotoImageBlob } from '../api/photos';
 import { MapPanel } from '../components/map/MapPanel';
 import { MapView } from '../components/map/MapView';
 import { RouteList } from '../components/routes/RouteList';
+import { useMapContext } from '../contexts/MapContext';
 import {
   createDefaultPinImageData,
   imageToPinImageData,
@@ -116,6 +117,7 @@ function createRouteClusterStackElement(
 
 export function Browse() {
   const navigate = useNavigate();
+  const mapContext = useMapContext();
   const { center: mapCenter, zoom: mapZoom } = usePreferredMapCenter();
   const [viewMode, setViewMode] = useState<ViewMode>('map');
   const [routes, setRoutes] = useState<Route[]>([]);
@@ -332,35 +334,42 @@ export function Browse() {
   }, []);
 
   useEffect(() => {
+    if (!mapContext) return;
+    mapContext.onMapReady(handleMapReady);
+  }, [mapContext, handleMapReady]);
+
+  useEffect(() => {
     const map = mapRef.current;
-    if (viewMode !== 'map' || !map) {
-      if (map && map.getSource(ROUTES_SOURCE_ID)) {
+    const hasMapApi = map && typeof (map as MapLibreMap).getSource === 'function';
+    if (viewMode !== 'map' || !hasMapApi) {
+      if (hasMapApi && (map as MapLibreMap).getSource(ROUTES_SOURCE_ID)) {
         clusterMarkersRef.current.forEach((m) => {
           try { m.remove(); } catch { /* ignore */ }
         });
         clusterMarkersRef.current = [];
-        map.removeLayer(UNCLUSTERED_LAYER_ID);
-        map.removeLayer(CLUSTER_LAYER_ID);
-        map.removeSource(ROUTES_SOURCE_ID);
+        (map as MapLibreMap).removeLayer(UNCLUSTERED_LAYER_ID);
+        (map as MapLibreMap).removeLayer(CLUSTER_LAYER_ID);
+        (map as MapLibreMap).removeSource(ROUTES_SOURCE_ID);
       }
       return;
     }
     if (routes.length === 0) {
-      if (map.getSource(ROUTES_SOURCE_ID)) {
+      if ((map as MapLibreMap).getSource(ROUTES_SOURCE_ID)) {
         clusterMarkersRef.current.forEach((m) => {
           try { m.remove(); } catch { /* ignore */ }
         });
         clusterMarkersRef.current = [];
-        map.removeLayer(UNCLUSTERED_LAYER_ID);
-        map.removeLayer(CLUSTER_LAYER_ID);
-        map.removeSource(ROUTES_SOURCE_ID);
+        (map as MapLibreMap).removeLayer(UNCLUSTERED_LAYER_ID);
+        (map as MapLibreMap).removeLayer(CLUSTER_LAYER_ID);
+        (map as MapLibreMap).removeSource(ROUTES_SOURCE_ID);
       }
       return;
     }
 
+    const mapApi = map as MapLibreMap;
     const geojson = buildRoutesGeoJSON(routes);
-    if (!map.getSource(ROUTES_SOURCE_ID)) {
-      map.addSource(ROUTES_SOURCE_ID, {
+    if (!mapApi.getSource(ROUTES_SOURCE_ID)) {
+      mapApi.addSource(ROUTES_SOURCE_ID, {
         type: 'geojson',
         data: geojson,
         cluster: true,
@@ -368,19 +377,19 @@ export function Browse() {
         clusterRadius: CLUSTER_RADIUS,
       });
       const defaultPin = createDefaultPinImageData();
-      if (!map.hasImage('default-pin')) {
-        map.addImage('default-pin', defaultPin);
+      if (!mapApi.hasImage('default-pin')) {
+        mapApi.addImage('default-pin', defaultPin);
       }
       routesWithPhoto.forEach((r) => {
         const id = r.first_photo_id as string;
-        if (map.hasImage(id)) return;
+        if (mapApi.hasImage(id)) return;
         try {
-          map.addImage(id, defaultPin);
+          mapApi.addImage(id, defaultPin);
         } catch {
           /* ignore */
         }
       });
-      map.addLayer({
+      mapApi.addLayer({
         id: CLUSTER_LAYER_ID,
         type: 'circle',
         source: ROUTES_SOURCE_ID,
@@ -391,7 +400,7 @@ export function Browse() {
           'circle-color': '#2563eb',
         },
       });
-      map.addLayer({
+      mapApi.addLayer({
         id: UNCLUSTERED_LAYER_ID,
         type: 'symbol',
         source: ROUTES_SOURCE_ID,
@@ -403,40 +412,47 @@ export function Browse() {
           'icon-ignore-placement': true,
         },
       });
-      map.on('click', CLUSTER_LAYER_ID, (e) => {
+      mapApi.on('click', CLUSTER_LAYER_ID, (e) => {
         const feature = e.features?.[0];
         if (!feature?.properties?.cluster_id) return;
-        const src = map.getSource(ROUTES_SOURCE_ID) as maplibregl.GeoJSONSource;
+        const src = mapApi.getSource(ROUTES_SOURCE_ID) as maplibregl.GeoJSONSource;
         if (!src?.getClusterExpansionZoom) return;
         const clusterId = feature.properties.cluster_id;
         Promise.resolve(src.getClusterExpansionZoom(clusterId)).then((zoom) => {
           const center = pointCoordinates(feature.geometry as GeoJSON.Point);
-          if (center) map.easeTo({ center, zoom, duration: 300 });
+          if (center) mapApi.easeTo({ center, zoom, duration: 300 });
         });
       });
-      map.on('click', UNCLUSTERED_LAYER_ID, (e) => {
+      mapApi.on('click', UNCLUSTERED_LAYER_ID, (e) => {
         const feature = e.features?.[0];
         const slug = (feature?.properties as { slug?: string })?.slug;
         if (slug) navigate(`/routes/${slug}`);
       });
     } else {
-      (map.getSource(ROUTES_SOURCE_ID) as maplibregl.GeoJSONSource).setData(geojson);
+      (mapApi.getSource(ROUTES_SOURCE_ID) as maplibregl.GeoJSONSource).setData(geojson);
     }
 
-    addImagesToMap(map);
-    updateClusterMarkers(map);
+    addImagesToMap(mapApi);
+    updateClusterMarkers(mapApi);
 
-    const onIdle = () => updateClusterMarkers(map);
-    map.on('idle', onIdle);
-    map.on('moveend', onIdle);
+    const onIdle = () => updateClusterMarkers(mapApi);
+    mapApi.on('idle', onIdle);
+    mapApi.on('moveend', onIdle);
 
     return () => {
-      map.off('idle', onIdle);
-      map.off('moveend', onIdle);
+      mapApi.off('idle', onIdle);
+      mapApi.off('moveend', onIdle);
       clusterMarkersRef.current.forEach((m) => {
         try { m.remove(); } catch { /* ignore */ }
       });
       clusterMarkersRef.current = [];
+      try {
+        if (mapApi.getLayer(UNCLUSTERED_LAYER_ID)) mapApi.removeLayer(UNCLUSTERED_LAYER_ID);
+        if (mapApi.getLayer(CLUSTER_LAYER_ID)) mapApi.removeLayer(CLUSTER_LAYER_ID);
+        if (mapApi.getSource(ROUTES_SOURCE_ID)) mapApi.removeSource(ROUTES_SOURCE_ID);
+      } catch {
+        /* defensive teardown */
+      }
     };
   }, [viewMode, routes, routesWithPhoto, navigate, addImagesToMap, updateClusterMarkers]);
 
@@ -468,63 +484,93 @@ export function Browse() {
     else if (mapRef.current && mapBbox) fetchMap(mapBbox);
   }, [viewMode, fetchList, mapBbox, fetchMap]);
 
-  return (
-    <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: '0.25rem' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('map')}
-            style={{
-              padding: '0.5rem 0.75rem',
-              fontWeight: viewMode === 'map' ? 'bold' : 'normal',
-              background: viewMode === 'map' ? '#e5e7eb' : 'transparent',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-            }}
-          >
-            Map
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            style={{
-              padding: '0.5rem 0.75rem',
-              fontWeight: viewMode === 'list' ? 'bold' : 'normal',
-              background: viewMode === 'list' ? '#e5e7eb' : 'transparent',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-            }}
-          >
-            List
-          </button>
-        </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ fontSize: '0.875rem' }}>Tags:</span>
-          <input
-            type="text"
-            value={tagsFilter}
-            onChange={(e) => setTagsFilter(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleApplyTags()}
-            placeholder="e.g. urban, night"
-            style={{ padding: '0.35rem 0.5rem', width: '160px', border: '1px solid #d1d5db', borderRadius: '4px' }}
-          />
-          <button type="button" onClick={handleApplyTags} style={{ padding: '0.35rem 0.5rem' }}>
-            Apply
-          </button>
-        </label>
-      </div>
+  const isShellMap = !!mapContext;
+  const overlayMessage =
+    viewMode === 'map' && (loading || bboxTooLarge)
+      ? loading
+        ? 'Loading routes…'
+        : 'Zoom in to see routes in this area'
+      : undefined;
 
-      {viewMode === 'map' && (
-        <MapPanel
-          overlay={
-            loading || bboxTooLarge
-              ? loading
-                ? 'Loading routes…'
-                : 'Zoom in to see routes in this area'
-              : undefined
-          }
+  const bar = (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '1rem',
+        flexWrap: 'wrap',
+        ...(isShellMap
+          ? {
+              position: 'absolute' as const,
+              top: '3.5rem',
+              left: '0.75rem',
+              zIndex: 100,
+              background: 'rgba(255,255,255,0.95)',
+              padding: '0.5rem 0.75rem',
+              borderRadius: 8,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              pointerEvents: 'auto' as const,
+            }
+          : { marginBottom: '0.5rem' }),
+      }}
+    >
+      <div style={{ display: 'flex', gap: '0.25rem' }}>
+        <button
+          type="button"
+          onClick={() => setViewMode('map')}
+          style={{
+            padding: '0.5rem 0.75rem',
+            fontWeight: viewMode === 'map' ? 'bold' : 'normal',
+            background: viewMode === 'map' ? '#e5e7eb' : 'transparent',
+            border: '1px solid #d1d5db',
+            borderRadius: '4px',
+          }}
         >
+          Map
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode('list')}
+          style={{
+            padding: '0.5rem 0.75rem',
+            fontWeight: viewMode === 'list' ? 'bold' : 'normal',
+            background: viewMode === 'list' ? '#e5e7eb' : 'transparent',
+            border: '1px solid #d1d5db',
+            borderRadius: '4px',
+          }}
+        >
+          List
+        </button>
+      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <span style={{ fontSize: '0.875rem' }}>Tags:</span>
+        <input
+          type="text"
+          value={tagsFilter}
+          onChange={(e) => setTagsFilter(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleApplyTags()}
+          placeholder="e.g. urban, night"
+          style={{ padding: '0.35rem 0.5rem', width: '160px', border: '1px solid #d1d5db', borderRadius: '4px' }}
+        />
+        <button type="button" onClick={handleApplyTags} style={{ padding: '0.35rem 0.5rem' }}>
+          Apply
+        </button>
+      </label>
+    </div>
+  );
+
+  return (
+    <div
+      style={
+        isShellMap
+          ? { position: 'absolute', inset: 0, pointerEvents: 'none' }
+          : { padding: '1rem', display: 'flex', flexDirection: 'column' }
+      }
+    >
+      {bar}
+
+      {viewMode === 'map' && !isShellMap && (
+        <MapPanel overlay={overlayMessage}>
           <MapView
             center={mapCenter}
             zoom={mapZoom}
@@ -534,8 +580,47 @@ export function Browse() {
         </MapPanel>
       )}
 
+      {viewMode === 'map' && isShellMap && overlayMessage && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '5rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '0.25rem 0.5rem',
+            background: 'rgba(255,255,255,0.9)',
+            borderRadius: 4,
+            fontSize: '0.875rem',
+            pointerEvents: 'auto',
+            zIndex: 100,
+          }}
+        >
+          {overlayMessage}
+        </div>
+      )}
+
       {viewMode === 'list' && (
-        <div style={{ flex: 1, minHeight: 200, overflow: 'hidden' }}>
+        <div
+          style={{
+            flex: isShellMap ? undefined : 1,
+            minHeight: isShellMap ? undefined : 200,
+            overflow: 'hidden',
+            ...(isShellMap
+              ? {
+                  position: 'absolute',
+                  top: '5rem',
+                  left: '0.75rem',
+                  right: '0.75rem',
+                  bottom: '0.75rem',
+                  background: 'rgba(255,255,255,0.98)',
+                  borderRadius: 8,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  pointerEvents: 'auto',
+                  zIndex: 100,
+                }
+              : {}),
+          }}
+        >
           <RouteList
             routes={routes}
             pagination={pagination}

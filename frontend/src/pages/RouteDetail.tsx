@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { updatePhoto } from '../api/photos';
 import { getRouteBySlug } from '../api/routes';
 import { Loading } from '../components/common/Loading';
+import { useMapContext } from '../contexts/MapContext';
 import { MapPanel } from '../components/map/MapPanel';
 import { MapPicker } from '../components/map/MapPicker';
 import { RouteView } from '../components/routes/RouteView';
@@ -16,6 +17,7 @@ import type { RouteDetailResponse } from '../types/route';
 export function RouteDetail() {
   const { slug } = useParams<{ slug: string }>();
   const { user, isAuthenticated } = useAuth();
+  const mapContext = useMapContext();
   const [data, setData] = useState<RouteDetailResponse | null>(null);
   const [loading, setLoading] = useState(!!slug);
   const [error, setError] = useState<{ message: string; status?: number } | null>(null);
@@ -26,6 +28,7 @@ export function RouteDetail() {
   const [savingLocation, setSavingLocation] = useState(false);
   const [editLocationError, setEditLocationError] = useState<string | null>(null);
   const { center: mapCenter } = usePreferredMapCenter();
+  const isShellMap = !!mapContext;
 
   useEffect(() => {
     if (!data) return;
@@ -146,7 +149,26 @@ export function RouteDetail() {
   };
 
   return (
-    <div style={{ padding: '2rem' }}>
+    <div
+      style={
+        isShellMap
+          ? {
+              position: 'absolute',
+              top: '3.5rem',
+              left: '0.75rem',
+              right: '0.75rem',
+              maxWidth: 420,
+              maxHeight: 'calc(100vh - 5rem)',
+              overflow: 'auto',
+              background: 'rgba(255,255,255,0.98)',
+              padding: '1rem',
+              borderRadius: 8,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              zIndex: 100,
+            }
+          : { padding: '2rem' }
+      }
+    >
       <p style={{ marginBottom: '1rem' }}>
         <Link to="/">Home</Link> / <Link to="/routes/create">Create route</Link>
       </p>
