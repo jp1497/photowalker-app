@@ -2,6 +2,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import type { RouteDetailResponse } from '../types/route';
 import { RouteDetail } from './RouteDetail';
 import * as routesApi from '../api/routes';
 
@@ -51,14 +52,14 @@ describe('RouteDetail', () => {
   });
 
   it('shows loading then route when fetch succeeds', async () => {
-    const mockData = {
+    const mockData: RouteDetailResponse = {
       route: {
         id: 'r1',
         user_id: 'u1',
         slug: 'my-route',
         title: 'My Route',
         description: 'Desc',
-        route_geometry: { type: 'LineString' as const, coordinates: [[0, 0], [1, 1]] },
+        route_geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] },
         distance_meters: 1000,
         is_public: true,
         created_at: '2026-01-01T00:00:00Z',

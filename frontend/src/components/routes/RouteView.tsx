@@ -2,6 +2,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import { fetchPhotoImageBlob } from '../../api/photos';
+import { useMapContext } from '../../contexts/MapContext';
+import {
+  CLUSTER_MAX_ZOOM,
+  CLUSTER_MIN_POINTS,
+  CLUSTER_RADIUS,
+} from '../map/clusterConfig';
 import { MapPanel } from '../map/MapPanel';
 import { MapView } from '../map/MapView';
 import {
@@ -38,8 +44,6 @@ const PHOTOS_SOURCE_ID = 'route-photos';
 const CLUSTER_LAYER_ID = 'route-photos-clusters';
 const UNCLUSTERED_LAYER_ID = 'route-photos-unclustered';
 const UNCLUSTERED_SELECTED_LAYER_ID = 'route-photos-unclustered-selected';
-const CLUSTER_MAX_ZOOM = 14;
-const CLUSTER_RADIUS = 50;
 const CLUSTER_STACK_SIZE = 44;
 const CLUSTER_STACK_OFFSET = 5;
 const CLUSTER_STACK_MAX_IMAGES = 5;
@@ -49,6 +53,18 @@ function pointCoordinates(geom: GeoJSON.Geometry): [number, number] | null {
     return [geom.coordinates[0], geom.coordinates[1]];
   }
   return null;
+}
+
+/** Geographic centroid of leaf points; stable across zoom so markers do not jump. */
+function computeClusterCentroid(coords: [number, number][]): [number, number] | null {
+  if (coords.length === 0) return null;
+  let sumLng = 0;
+  let sumLat = 0;
+  for (const [lng, lat] of coords) {
+    sumLng += lng;
+    sumLat += lat;
+  }
+  return [sumLng / coords.length, sumLat / coords.length];
 }
 
 function getBoundsFromCoords(coords: [number, number][]): [[number, number], [number, number]] {
@@ -133,6 +149,7 @@ function createClusterStackElement(
 export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: RouteViewProps) {
   const mapRef = useRef<MapLibreMap | null>(null);
   const clusterMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const clusterUpdateRunRef = useRef(0);
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const thumbnailUrlsRef = useRef<Record<string, string>>({});
 
@@ -227,14 +244,20 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
         : () => Promise.resolve<GeoJSON.Feature<GeoJSON.Point>[]>([]);
 
     const clusterFeatures = map.queryRenderedFeatures({ layers: [CLUSTER_LAYER_ID] });
+    const seenIds = new Set<number>();
     const dist2 = (a: [number, number], b: [number, number]) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
+
+    const runId = ++clusterUpdateRunRef.current;
 
     clusterFeatures.forEach((feature) => {
       const clusterId = feature.properties?.cluster_id as number | undefined;
-      const center = pointCoordinates(feature.geometry as GeoJSON.Point);
-      if (clusterId == null || !center) return;
+      const fallbackCenter = pointCoordinates(feature.geometry as GeoJSON.Point);
+      if (clusterId == null || !fallbackCenter) return;
+      if (seenIds.has(clusterId)) return;
+      seenIds.add(clusterId);
 
       getLeaves(clusterId).then((leaves) => {
+        if (clusterUpdateRunRef.current !== runId) return;
         if (!map.getSource(PHOTOS_SOURCE_ID)) return;
         const withCoords = leaves
           .map((f) => {
@@ -243,6 +266,7 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
             return c && id ? { photoId: id, coords: c } : null;
           })
           .filter((x): x is { photoId: string; coords: [number, number] } => x !== null);
+        const center = computeClusterCentroid(withCoords.map((x) => x.coords)) ?? fallbackCenter;
         withCoords.sort((a, b) => dist2(a.coords, center) - dist2(b.coords, center));
         const photoIds = withCoords.map((x) => x.photoId);
 
@@ -287,6 +311,7 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
         cluster: true,
         clusterMaxZoom: CLUSTER_MAX_ZOOM,
         clusterRadius: CLUSTER_RADIUS,
+        clusterMinPoints: CLUSTER_MIN_POINTS,
       });
 
       const defaultPin = createDefaultPinImageData();
@@ -373,9 +398,10 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
       addImagesToMap(map as MapLibreMap);
       updateClusterMarkers(map as MapLibreMap);
 
-      const onMoveEnd = () => updateClusterMarkers(map as MapLibreMap);
-      map.on('idle', onMoveEnd);
-      map.on('moveend', onMoveEnd);
+      const onUpdateMarkers = () => updateClusterMarkers(map as MapLibreMap);
+      map.on('idle', onUpdateMarkers);
+      map.on('moveend', onUpdateMarkers);
+      map.on('zoomend', onUpdateMarkers);
     },
     [hasRoute, coordinates, photos, photosWithLocation, onSelectPhoto, addImagesToMap, updateClusterMarkers, selectedPhotoId]
   );
@@ -401,8 +427,15 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
     }
   }, [selectedPhotoId]);
 
+  const mapContext = useMapContext();
+
+  useEffect(() => {
+    if (!mapContext) return;
+    mapContext.onMapReady(handleMapReady);
+  }, [mapContext, handleMapReady]);
   useEffect(() => {
     return () => {
+      const map = mapRef.current;
       clusterMarkersRef.current.forEach((m) => {
         try {
           m.remove();
@@ -415,18 +448,33 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto }: Rou
         if (u) URL.revokeObjectURL(u);
       });
       thumbnailUrlsRef.current = {};
+      if (map) {
+        try {
+          if (map.getLayer(UNCLUSTERED_SELECTED_LAYER_ID)) map.removeLayer(UNCLUSTERED_SELECTED_LAYER_ID);
+          if (map.getLayer(UNCLUSTERED_LAYER_ID)) map.removeLayer(UNCLUSTERED_LAYER_ID);
+          if (map.getLayer(CLUSTER_LAYER_ID)) map.removeLayer(CLUSTER_LAYER_ID);
+          if (map.getLayer(ROUTE_LAYER_ID)) map.removeLayer(ROUTE_LAYER_ID);
+          if (map.getSource(PHOTOS_SOURCE_ID)) map.removeSource(PHOTOS_SOURCE_ID);
+          if (map.getSource(ROUTE_SOURCE_ID)) map.removeSource(ROUTE_SOURCE_ID);
+        } catch {
+          /* defensive teardown */
+        }
+      }
       mapRef.current = null;
     };
   }, []);
 
   const pointCount = coordinates.length;
   const distanceKm = (route.distance_meters / 1000).toFixed(2);
+  const isShellMap = !!mapContext;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <MapPanel>
-        <MapView onMapReady={handleMapReady} style={{ width: '100%', height: '100%' }} />
-      </MapPanel>
+      {!isShellMap && (
+        <MapPanel>
+          <MapView onMapReady={handleMapReady} style={{ width: '100%', height: '100%' }} />
+        </MapPanel>
+      )}
       <section data-testid="route-detail-content">
         <h1 data-testid="route-detail-title" style={{ margin: 0, fontSize: '1.75rem' }}>{route.title}</h1>
         {route.description && (

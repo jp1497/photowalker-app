@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from './client';
 import { createRoute, createRouteFromPhotos, getBrowseRoutes } from './routes';
-import type { RouteCreatePayload, RouteFromPhotosPayload } from '../types/route';
+import type { Route, RouteCreatePayload, RouteFromPhotosPayload } from '../types/route';
 
 vi.mock('./client', () => ({
   apiClient: {
@@ -59,12 +59,12 @@ describe('routes API', () => {
       is_public: false,
       photo_ids: ['photo-a', 'photo-b', 'photo-c'],
     };
-    const route = {
+    const route: Route = {
       id: 'route-1',
       user_id: 'user-1',
       slug: 'from-photos-xyz',
       title: payload.title,
-      description: payload.description,
+      description: payload.description ?? null,
       route_geometry: { type: 'LineString', coordinates: [] },
       distance_meters: 500,
       is_public: false,
@@ -77,12 +77,12 @@ describe('routes API', () => {
     const result = await createRouteFromPhotos(payload);
 
     expect(apiClient.post).toHaveBeenCalledWith('/v1/routes/from-photos', payload);
-    expect(result.route.photo_ids).toBeUndefined();
+    expect((result.route as Route & { photo_ids?: unknown }).photo_ids).toBeUndefined();
     expect(result.route.slug).toBe('from-photos-xyz');
   });
 
   it('getBrowseRoutes sends GET /v1/routes with params', async () => {
-    const routes = [];
+    const routes: Route[] = [];
     const pagination = { page: 1, per_page: 20, total: 0 };
     vi.mocked(apiClient.get).mockResolvedValue({ data: { routes, pagination } });
 

@@ -1,15 +1,17 @@
 /** Photo-first create route: upload photos, place on map, reorder, submit to POST /v1/routes/from-photos. PRD v3 FR-R1. */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import { MapView } from '../components/map/MapView';
 import { MapPicker } from '../components/map/MapPicker';
 import { createPhotoMarkerElement } from '../components/map/PhotoMarker';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
+import { useMapContext } from '../contexts/MapContext';
 import { uploadPhoto, updatePhoto, getPhotoImageUrl } from '../api/photos';
 import { apiClient } from '../api/client';
 import { createRouteFromPhotos } from '../api/routes';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { usePreferredMapCenter } from '../hooks/usePreferredMapCenter';
 import type { Photo } from '../types/photo';
 import type { RouteFromPhotosPayload } from '../types/route';
@@ -81,6 +83,7 @@ function ThumbnailLoader({
 
 export function CreateRouteFromPhotos() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { center: mapCenter } = usePreferredMapCenter();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -96,7 +99,11 @@ export function CreateRouteFromPhotos() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(true);
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const floatingButtonRef = useRef<HTMLButtonElement>(null);
+  const placePhotoModalRef = useRef<HTMLDivElement>(null);
   const thumbnailUrlsRef = useRef<Record<string, string>>({});
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -250,6 +257,13 @@ export function CreateRouteFromPhotos() {
     [updateMap]
   );
 
+  const mapContext = useMapContext();
+
+  useEffect(() => {
+    if (!mapContext) return;
+    mapContext.onMapReady(handleMapReady);
+  }, [mapContext, handleMapReady]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (map) updateMap(map);
@@ -257,7 +271,23 @@ export function CreateRouteFromPhotos() {
 
   useEffect(() => {
     return () => {
+      const map = mapRef.current;
+      markersRef.current.forEach((m) => {
+        try {
+          m.remove();
+        } catch {
+          /* ignore */
+        }
+      });
       markersRef.current = [];
+      if (map) {
+        try {
+          if (map.getLayer(ROUTE_PREVIEW_LAYER_ID)) map.removeLayer(ROUTE_PREVIEW_LAYER_ID);
+          if (map.getSource(ROUTE_PREVIEW_SOURCE_ID)) map.removeSource(ROUTE_PREVIEW_SOURCE_ID);
+        } catch {
+          /* defensive teardown */
+        }
+      }
       mapRef.current = null;
     };
   }, []);
@@ -314,10 +344,57 @@ export function CreateRouteFromPhotos() {
   const photosWithoutLocation = photos.filter(
     (p) => !p.location?.coordinates || p.location.coordinates.length < 2
   );
+  const isShellMap = !!mapContext;
 
-  return (
-    <div style={{ padding: '2rem', maxWidth: 720, margin: '0 auto' }}>
-      <h1 data-testid="create-route-from-photos-title">Create route from photos</h1>
+  useEffect(() => {
+    if (location.state && typeof location.state === 'object' && 'openDrawer' in location.state && location.state.openDrawer) {
+      setDrawerOpen(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (!isShellMap) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (photoToPlace) {
+          setPhotoToPlace(null);
+          setPickedCoords(null);
+          setPlaceError(null);
+        } else {
+          setDrawerOpen(false);
+        }
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isShellMap, photoToPlace]);
+
+  useFocusTrap(drawerRef, { active: isShellMap && drawerOpen && !photoToPlace });
+  useFocusTrap(placePhotoModalRef, { active: !!photoToPlace });
+
+  useEffect(() => {
+    if (!drawerOpen && isShellMap && !photoToPlace) floatingButtonRef.current?.focus();
+  }, [drawerOpen, isShellMap, photoToPlace]);
+
+  const drawerTop = '6rem';
+  const floatingButtonStyle = {
+    position: 'absolute' as const,
+    top: '3.5rem',
+    left: '0.75rem',
+    zIndex: 500,
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.875rem',
+    border: '1px solid #d1d5db',
+    borderRadius: 6,
+    background: 'rgba(255,255,255,0.95)',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    cursor: 'pointer' as const,
+    pointerEvents: 'auto' as const,
+  };
+
+  const createContent = (
+    <>
       <p style={{ color: '#666', marginBottom: '1.5rem' }}>
         Upload photos, place them on the map if needed, reorder to define the route, then add a title and create.
       </p>
@@ -441,17 +518,24 @@ export function CreateRouteFromPhotos() {
                 );
               })}
             </ul>
-            <div
-              style={{ height: 280, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden', marginTop: '0.75rem' }}
-              data-testid="create-route-from-photos-map"
-            >
-              <MapView
-                center={mapCenter}
-                zoom={12}
-                onMapReady={handleMapReady}
-                style={{ width: '100%', height: '100%' }}
-              />
-            </div>
+            {!isShellMap && (
+              <div
+                style={{ height: 280, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden', marginTop: '0.75rem' }}
+                data-testid="create-route-from-photos-map"
+              >
+                <MapView
+                  center={mapCenter}
+                  zoom={12}
+                  onMapReady={handleMapReady}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+            )}
+            {isShellMap && (
+              <p style={{ fontSize: '0.875rem', color: '#666', marginTop: '0.5rem' }}>
+                Map is behind this panel. Reorder and place photos; the route preview updates on the map.
+              </p>
+            )}
           </section>
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -503,91 +587,163 @@ export function CreateRouteFromPhotos() {
           </form>
         </>
       )}
+    </>
+  );
 
-      {photoToPlace && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Place photo on map"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-          onClick={(e) => e.target === e.currentTarget && setPlaceError(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
+  const placePhotoModal = photoToPlace ? (
+    <div
+      ref={placePhotoModalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Place photo on map"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.6)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+        pointerEvents: 'auto',
+      }}
+      onClick={(e) => e.target === e.currentTarget && setPlaceError(null)}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: '#fff',
+          borderRadius: 8,
+          padding: '1rem',
+          width: '90vw',
+          maxWidth: 560,
+          maxHeight: '85vh',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.75rem',
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: '1.125rem' }}>Place photo on map</h3>
+        <p style={{ margin: 0, fontSize: '0.875rem', color: '#666' }}>
+          Click the map to set this photo&apos;s location, then Save.
+        </p>
+        <div style={{ height: 320, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden' }}>
+          <MapPicker
+            initialCenter={mapCenter}
+            onSelect={setPickedCoords}
+            style={{ height: '100%' }}
+          />
+        </div>
+        {pickedCoords && (
+          <p style={{ margin: 0, fontSize: '0.875rem', fontFamily: 'monospace' }}>
+            Selected: [{pickedCoords[0].toFixed(5)}, {pickedCoords[1].toFixed(5)}]
+          </p>
+        )}
+        {placeError && (
+          <p style={{ color: '#b91c1c', fontSize: '0.875rem', margin: 0 }} role="alert">
+            {placeError}
+          </p>
+        )}
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={() => {
+              setPhotoToPlace(null);
+              setPickedCoords(null);
+              setPlaceError(null);
+            }}
+            style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveLocation}
+            disabled={!pickedCoords || savingLocation}
             style={{
-              background: '#fff',
-              borderRadius: 8,
-              padding: '1rem',
-              width: '90vw',
-              maxWidth: 560,
-              maxHeight: '85vh',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.75rem',
+              padding: '0.5rem 1rem',
+              fontSize: '0.875rem',
+              cursor: pickedCoords && !savingLocation ? 'pointer' : 'not-allowed',
+              background: '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              fontWeight: 500,
             }}
           >
-            <h3 style={{ margin: 0, fontSize: '1.125rem' }}>Place photo on map</h3>
-            <p style={{ margin: 0, fontSize: '0.875rem', color: '#666' }}>
-              Click the map to set this photo&apos;s location, then Save.
-            </p>
-            <div style={{ height: 320, border: '1px solid #ccc', borderRadius: 4, overflow: 'hidden' }}>
-              <MapPicker
-                initialCenter={mapCenter}
-                onSelect={setPickedCoords}
-                style={{ height: '100%' }}
-              />
+            {savingLocation ? 'Saving…' : 'Save location'}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  if (!isShellMap) {
+    return (
+      <div style={{ padding: '2rem', maxWidth: 720, margin: '0 auto' }}>
+        <h1 data-testid="create-route-from-photos-title">Create route from photos</h1>
+        {createContent}
+        {placePhotoModal}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}>
+      {!drawerOpen && (
+        <button
+          ref={floatingButtonRef}
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          style={floatingButtonStyle}
+          aria-label="Open create route"
+        >
+          Create route
+        </button>
+      )}
+      {drawerOpen && (
+        <>
+          <div
+            role="presentation"
+            aria-hidden="true"
+            style={{ position: 'absolute', inset: 0, zIndex: 201, background: 'rgba(0,0,0,0.3)', pointerEvents: 'auto' }}
+            onClick={() => setDrawerOpen(false)}
+          />
+          <div
+            ref={drawerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Create route"
+            style={{
+              position: 'absolute',
+              top: drawerTop,
+              left: '0.75rem',
+              right: '0.75rem',
+              bottom: '0.75rem',
+              width: 'min(480px, calc(100vw - 1.5rem))',
+              maxHeight: 'calc(100vh - 6.75rem)',
+              display: 'flex',
+              flexDirection: 'column',
+              background: '#fff',
+              border: '1px solid #e5e7eb',
+              borderRadius: 8,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              pointerEvents: 'auto',
+              zIndex: 202,
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderBottom: '1px solid #e5e7eb' }}>
+              <h2 style={{ margin: 0, fontSize: '1rem' }}>Create route</h2>
+              <button type="button" onClick={() => setDrawerOpen(false)} aria-label="Close">×</button>
             </div>
-            {pickedCoords && (
-              <p style={{ margin: 0, fontSize: '0.875rem', fontFamily: 'monospace' }}>
-                Selected: [{pickedCoords[0].toFixed(5)}, {pickedCoords[1].toFixed(5)}]
-              </p>
-            )}
-            {placeError && (
-              <p style={{ color: '#b91c1c', fontSize: '0.875rem', margin: 0 }} role="alert">
-                {placeError}
-              </p>
-            )}
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setPhotoToPlace(null);
-                  setPickedCoords(null);
-                  setPlaceError(null);
-                }}
-                style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveLocation}
-                disabled={!pickedCoords || savingLocation}
-                style={{
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.875rem',
-                  cursor: pickedCoords && !savingLocation ? 'pointer' : 'not-allowed',
-                  background: '#2563eb',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 6,
-                  fontWeight: 500,
-                }}
-              >
-                {savingLocation ? 'Saving…' : 'Save location'}
-              </button>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '1rem' }}>
+              <h1 data-testid="create-route-from-photos-title" style={{ fontSize: '1.25rem', margin: '0 0 0.5rem' }}>Create route from photos</h1>
+              {createContent}
             </div>
           </div>
-        </div>
+        </>
       )}
+      {placePhotoModal}
     </div>
   );
 }

@@ -1,9 +1,11 @@
-/** Route detail page. Fetch by slug, display map + gallery + metadata. */
-import { useCallback, useEffect, useState } from 'react';
+/** Route detail page. Map full viewport; metadata and gallery in closable panel. */
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { Link, useParams } from 'react-router-dom';
 import { updatePhoto } from '../api/photos';
 import { getRouteBySlug } from '../api/routes';
 import { Loading } from '../components/common/Loading';
+import { useMapContext } from '../contexts/MapContext';
 import { MapPanel } from '../components/map/MapPanel';
 import { MapPicker } from '../components/map/MapPicker';
 import { RouteView } from '../components/routes/RouteView';
@@ -16,6 +18,7 @@ import type { RouteDetailResponse } from '../types/route';
 export function RouteDetail() {
   const { slug } = useParams<{ slug: string }>();
   const { user, isAuthenticated } = useAuth();
+  const mapContext = useMapContext();
   const [data, setData] = useState<RouteDetailResponse | null>(null);
   const [loading, setLoading] = useState(!!slug);
   const [error, setError] = useState<{ message: string; status?: number } | null>(null);
@@ -25,7 +28,22 @@ export function RouteDetail() {
   const [editLocationCoords, setEditLocationCoords] = useState<[number, number] | null>(null);
   const [savingLocation, setSavingLocation] = useState(false);
   const [editLocationError, setEditLocationError] = useState<string | null>(null);
+  const [detailsPanelOpen, setDetailsPanelOpen] = useState(true);
   const { center: mapCenter } = usePreferredMapCenter();
+  const isShellMap = !!mapContext;
+  const detailsPanelRef = useRef<HTMLDivElement>(null);
+  const floatingButtonRef = useRef<HTMLButtonElement>(null);
+  const editLocationModalRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(detailsPanelRef, {
+    active: isShellMap && detailsPanelOpen && !editingPhotoId,
+  });
+
+  useFocusTrap(editLocationModalRef, { active: !!editingPhotoId });
+
+  useEffect(() => {
+    if (!detailsPanelOpen && isShellMap && !editingPhotoId) floatingButtonRef.current?.focus();
+  }, [detailsPanelOpen, isShellMap, editingPhotoId]);
 
   useEffect(() => {
     if (!data) return;
@@ -80,6 +98,23 @@ export function RouteDetail() {
     };
   }, [slug]);
 
+  useEffect(() => {
+    if (!isShellMap) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (editingPhotoId) {
+          setEditingPhotoId(null);
+          setEditLocationCoords(null);
+          setEditLocationError(null);
+        } else {
+          setDetailsPanelOpen(false);
+        }
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isShellMap, editingPhotoId]);
+
   if (!slug) {
     return (
       <div style={{ padding: '2rem' }}>
@@ -90,7 +125,24 @@ export function RouteDetail() {
   }
 
   if (loading) {
-    return (
+    return isShellMap ? (
+      <div
+        style={{
+          position: 'absolute',
+          top: '5rem',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          padding: '0.5rem 1rem',
+          background: 'rgba(255,255,255,0.95)',
+          borderRadius: 6,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          pointerEvents: 'auto',
+          zIndex: 100,
+        }}
+      >
+        <Loading label="Loading route..." />
+      </div>
+    ) : (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
         <Loading label="Loading route..." />
       </div>
@@ -101,7 +153,34 @@ export function RouteDetail() {
     const is404 = error?.status === 404;
     const is403 = error?.status === 403;
     const canRetry = !is404 && !is403;
-    return (
+    return isShellMap ? (
+      <div
+        style={{
+          position: 'absolute',
+          top: '5rem',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          padding: '1rem 1.5rem',
+          background: 'rgba(255,255,255,0.98)',
+          borderRadius: 8,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          pointerEvents: 'auto',
+          zIndex: 500,
+          maxWidth: 'calc(100vw - 2rem)',
+        }}
+      >
+        <h2 style={{ marginTop: 0, fontSize: '1.125rem' }}>{is404 ? 'Route not found' : is403 ? 'Private route' : 'Error'}</h2>
+        <p style={{ marginBottom: '1rem' }}>{error?.message ?? 'Route not found'}</p>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {canRetry && (
+            <button type="button" onClick={retry}>
+              Retry
+            </button>
+          )}
+          <Link to="/browse">Browse</Link>
+        </div>
+      </div>
+    ) : (
       <div style={{ padding: '2rem' }}>
         <h2 style={{ marginTop: 0 }}>{is404 ? 'Route not found' : is403 ? 'Private route' : 'Error'}</h2>
         <p style={{ marginBottom: '1rem' }}>{error?.message ?? 'Route not found'}</p>
@@ -145,13 +224,236 @@ export function RouteDetail() {
     }
   };
 
+  const floatingButtonStyle = {
+    position: 'absolute' as const,
+    top: '3.5rem',
+    left: '0.75rem',
+    zIndex: 500,
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.875rem',
+    border: '1px solid #d1d5db',
+    borderRadius: 6,
+    background: 'rgba(255,255,255,0.95)',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    cursor: 'pointer' as const,
+    pointerEvents: 'auto' as const,
+  };
+
+  if (!isShellMap) {
+    return (
+      <div style={{ padding: '2rem' }}>
+        <p style={{ marginBottom: '1rem' }}>
+          <Link to="/">Home</Link> / <Link to="/routes/create">Create route</Link>
+        </p>
+        {editingPhotoId && (
+          <div
+            ref={editLocationModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Edit photo location"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.6)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1001,
+            }}
+            onClick={(e) => e.target === e.currentTarget && setEditLocationError(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: '#fff',
+                borderRadius: 8,
+                padding: '1rem',
+                width: '90vw',
+                maxWidth: 560,
+                maxHeight: '85vh',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '1.125rem' }}>Edit photo location</h3>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#666' }}>
+                Click the map to set the photo&apos;s location, then Save.
+              </p>
+              <MapPanel>
+                <MapPicker
+                  initialCenter={editMapCenter}
+                  onSelect={setEditLocationCoords}
+                  style={{ height: '100%' }}
+                />
+              </MapPanel>
+              {editLocationCoords && (
+                <p style={{ margin: 0, fontSize: '0.875rem', fontFamily: 'monospace' }}>
+                  Selected: [{editLocationCoords[0].toFixed(5)}, {editLocationCoords[1].toFixed(5)}]
+                </p>
+              )}
+              {editLocationError && (
+                <p style={{ color: '#b91c1c', fontSize: '0.875rem', margin: 0 }} role="alert">
+                  {editLocationError}
+                </p>
+              )}
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingPhotoId(null);
+                    setEditLocationCoords(null);
+                    setEditLocationError(null);
+                  }}
+                  style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEditLocation}
+                  disabled={!editLocationCoords || savingLocation}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.875rem',
+                    cursor: editLocationCoords && !savingLocation ? 'pointer' : 'not-allowed',
+                    background: '#2563eb',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 6,
+                    fontWeight: 500,
+                  }}
+                >
+                  {savingLocation ? 'Saving…' : 'Save location'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        <RouteView route={route} photos={photos} selectedPhotoId={selectedPhotoId} onSelectPhoto={setSelectedPhotoId} />
+        <section style={{ marginTop: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+            <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Photos</h2>
+            {isOwner && (
+              <button
+                type="button"
+                data-testid="route-detail-add-photos"
+                onClick={() => setShowUpload((v) => !v)}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem', cursor: 'pointer' }}
+              >
+                {showUpload ? 'Cancel' : 'Add photos'}
+              </button>
+            )}
+          </div>
+          {showUpload && isOwner && (
+            <div style={{ marginBottom: '1rem', padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+              <PhotoUploadForm
+                routeIds={[route.id]}
+                onSuccess={() => {
+                  refetch();
+                  setShowUpload(false);
+                }}
+              />
+            </div>
+          )}
+          <PhotoGallery
+            photos={photos}
+            selectedPhotoId={selectedPhotoId}
+            onSelectPhoto={setSelectedPhotoId}
+            isOwner={isOwner}
+            onEditLocation={isOwner ? (photoId) => { setEditingPhotoId(photoId); setEditLocationError(null); } : undefined}
+          />
+        </section>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ padding: '2rem' }}>
-      <p style={{ marginBottom: '1rem' }}>
-        <Link to="/">Home</Link> / <Link to="/routes/create">Create route</Link>
-      </p>
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        zIndex: 10,
+      }}
+    >
+      {!detailsPanelOpen && (
+        <button
+          ref={floatingButtonRef}
+          type="button"
+          onClick={() => setDetailsPanelOpen(true)}
+          style={floatingButtonStyle}
+          aria-label="Open route details"
+        >
+          {route.title}
+        </button>
+      )}
+      {detailsPanelOpen && (
+        <div
+          ref={detailsPanelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Route details"
+          style={{
+            position: 'absolute',
+            top: '3.5rem',
+            left: '0.75rem',
+            width: 'min(420px, calc(100vw - 1.5rem))',
+            maxHeight: 'calc(100vh - 5rem)',
+            overflow: 'auto',
+            background: 'rgba(255,255,255,0.98)',
+            padding: '1rem',
+            borderRadius: 8,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            zIndex: 500,
+            pointerEvents: 'auto',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+            <p style={{ margin: 0, fontSize: '0.875rem' }}>
+              <Link to="/">Home</Link> / <Link to="/browse">Browse</Link>
+            </p>
+            <button type="button" onClick={() => setDetailsPanelOpen(false)} aria-label="Close details">×</button>
+          </div>
+          <RouteView route={route} photos={photos} selectedPhotoId={selectedPhotoId} onSelectPhoto={setSelectedPhotoId} />
+          <section style={{ marginTop: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+              <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Photos</h2>
+              {isOwner && (
+                <button
+                  type="button"
+                  data-testid="route-detail-add-photos"
+                  onClick={() => setShowUpload((v) => !v)}
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem', cursor: 'pointer' }}
+                >
+                  {showUpload ? 'Cancel' : 'Add photos'}
+                </button>
+              )}
+            </div>
+            {showUpload && isOwner && (
+              <div style={{ marginBottom: '1rem', padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                <PhotoUploadForm
+                  routeIds={[route.id]}
+                  onSuccess={() => {
+                    refetch();
+                    setShowUpload(false);
+                  }}
+                />
+              </div>
+            )}
+            <PhotoGallery
+              photos={photos}
+              selectedPhotoId={selectedPhotoId}
+              onSelectPhoto={setSelectedPhotoId}
+              isOwner={isOwner}
+              onEditLocation={isOwner ? (photoId) => { setEditingPhotoId(photoId); setEditLocationError(null); } : undefined}
+            />
+          </section>
+        </div>
+      )}
       {editingPhotoId && (
         <div
+          ref={editLocationModalRef}
           role="dialog"
           aria-modal="true"
           aria-label="Edit photo location"
@@ -163,6 +465,7 @@ export function RouteDetail() {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 1001,
+            pointerEvents: 'auto',
           }}
           onClick={(e) => e.target === e.currentTarget && setEditLocationError(null)}
         >
@@ -234,45 +537,6 @@ export function RouteDetail() {
           </div>
         </div>
       )}
-      <RouteView
-        route={route}
-        photos={photos}
-        selectedPhotoId={selectedPhotoId}
-        onSelectPhoto={setSelectedPhotoId}
-      />
-      <section style={{ marginTop: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Photos</h2>
-          {isOwner && (
-            <button
-              type="button"
-              data-testid="route-detail-add-photos"
-              onClick={() => setShowUpload((v) => !v)}
-              style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem', cursor: 'pointer' }}
-            >
-              {showUpload ? 'Cancel' : 'Add photos'}
-            </button>
-          )}
-        </div>
-        {showUpload && isOwner && (
-          <div style={{ marginBottom: '1rem', padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8 }}>
-            <PhotoUploadForm
-              routeIds={[route.id]}
-              onSuccess={() => {
-                refetch();
-                setShowUpload(false);
-              }}
-            />
-          </div>
-        )}
-        <PhotoGallery
-          photos={photos}
-          selectedPhotoId={selectedPhotoId}
-          onSelectPhoto={setSelectedPhotoId}
-          isOwner={isOwner}
-          onEditLocation={isOwner ? (photoId) => { setEditingPhotoId(photoId); setEditLocationError(null); } : undefined}
-        />
-      </section>
     </div>
   );
 }

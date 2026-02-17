@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import type { Route } from '../types/route';
 import { Browse } from './Browse';
 import * as routesApi from '../api/routes';
 
@@ -18,15 +19,30 @@ vi.mock('../components/map/MapView', () => ({
           getSouthWest: () => ({ lng: -122.5, lat: 37.7 }),
           getNorthEast: () => ({ lng: -122.3, lat: 37.9 }),
         }),
+        getSource: vi.fn().mockReturnValue(null),
+        getLayer: vi.fn().mockReturnValue(undefined),
+        hasImage: vi.fn().mockReturnValue(false),
+        addSource: vi.fn(),
+        addLayer: vi.fn(),
+        addImage: vi.fn(),
+        removeSource: vi.fn(),
+        removeLayer: vi.fn(),
         on: vi.fn(),
+        off: vi.fn(),
         once: vi.fn((_ev: string, cb: () => void) => {
           setTimeout(cb, 0);
         }),
+        queryRenderedFeatures: vi.fn().mockReturnValue([]),
+        getStyle: vi.fn().mockReturnValue({}),
+        easeTo: vi.fn(),
       };
       setTimeout(() => onMapReady(fakeMap), 0);
     }
     return <div data-testid="map-view">Map</div>;
   },
+}));
+vi.mock('../contexts/MapContext', () => ({
+  useMapContext: vi.fn(() => null),
 }));
 vi.mock('maplibre-gl', () => ({
   default: {
@@ -39,14 +55,14 @@ vi.mock('maplibre-gl', () => ({
   },
 }));
 
-const mockRoutes = [
+const mockRoutes: Route[] = [
   {
     id: 'r1',
     user_id: 'u1',
     slug: 'urban-walk',
     title: 'Urban Walk',
     description: 'A walk',
-    route_geometry: { type: 'LineString' as const, coordinates: [[-122.4, 37.8], [-122.38, 37.82]] },
+    route_geometry: { type: 'LineString', coordinates: [[-122.4, 37.8], [-122.38, 37.82]] },
     distance_meters: 2000,
     is_public: true,
     created_at: '2025-01-01T00:00:00Z',
@@ -110,5 +126,27 @@ describe('Browse', () => {
     });
     expect(screen.getByText(/Page 1 of 2/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /next/i })).toBeTruthy();
+  });
+
+  it('shell mode: Filters and List open overlays; list overlay shows RouteList', async () => {
+    const { useMapContext } = await import('../contexts/MapContext');
+    vi.mocked(useMapContext).mockReturnValue({ map: null, onMapReady: vi.fn() });
+
+    vi.mocked(routesApi.getBrowseRoutes).mockResolvedValue({
+      routes: mockRoutes,
+      pagination: { page: 1, per_page: 20, total: 1 },
+    });
+
+    render(
+      <MemoryRouter>
+        <Browse />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('button', { name: /open filters/i })).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: /routes list/i })).toBeTruthy();
+    });
+    expect(screen.getByText('Urban Walk')).toBeTruthy();
   });
 });

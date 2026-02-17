@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { CreateRouteFromPhotos } from './CreateRouteFromPhotos';
 import * as routesApi from '../api/routes';
 import * as photosApi from '../api/photos';
+import type { UploadPhotoResponse } from '../types/photo';
 
 vi.mock('maplibre-gl', () => ({
   default: {
@@ -180,7 +181,7 @@ describe('CreateRouteFromPhotos', () => {
           created_at: '',
           updated_at: '',
         },
-      } as photosApi.UploadPhotoResponse)
+      } as UploadPhotoResponse)
       .mockResolvedValueOnce({
         photo: {
           id: 'p2',
@@ -194,7 +195,7 @@ describe('CreateRouteFromPhotos', () => {
           created_at: '',
           updated_at: '',
         },
-      } as photosApi.UploadPhotoResponse);
+      } as UploadPhotoResponse);
 
     render(
       <MemoryRouter>
