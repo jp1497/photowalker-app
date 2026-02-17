@@ -640,7 +640,7 @@ export function Browse() {
                   right: '0.75rem',
                   bottom: '0.75rem',
                   maxWidth: 400,
-                  maxHeight: 'calc(100vh - 9.75rem)',
+                  maxHeight: 'calc(100vh - 6.75rem)',
                   display: 'flex',
                   flexDirection: 'column',
                   background: '#fff',
