@@ -56,7 +56,7 @@ Verify PostGIS: `docker compose exec postgres psql -U photowalker -d photowalker
 Configure environment:
 
 - `backend/`: Copy `.env.example` to `.env` and fill in values
-- `frontend/`: Copy `.env.example` to `.env.local` and set `VITE_API_URL`
+- `frontend/`: Copy `.env.example` to `.env.local` and set `VITE_API_URL`. The map uses the Protomaps Tile API; set `VITE_PROTOMAPS_API_KEY` in `.env.local` (get a key at [protomaps.com/account](https://protomaps.com/account), free for non-commercial use).
 
 See [Step 0.2: Development Environment](./Design/IMPLEMENTATION_ROADMAP.md#step-02-development-environment) for details.
 

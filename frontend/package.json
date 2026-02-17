@@ -14,6 +14,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@protomaps/basemaps": "^5.7.0",
     "@turf/helpers": "^7.1.0",
     "@turf/length": "^7.1.0",
     "axios": "^1.6.0",
