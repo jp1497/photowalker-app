@@ -13,6 +13,7 @@ import {
   createDefaultPinImageData,
   imageToPinImageData,
 } from '../components/map/pinImageUtils';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { usePreferredMapCenter } from '../hooks/usePreferredMapCenter';
 import type { Route } from '../types/route';
 
@@ -132,6 +133,13 @@ export function Browse() {
   const listPage = useRef(1);
   const [filtersOverlayOpen, setFiltersOverlayOpen] = useState(false);
   const [listOverlayOpen, setListOverlayOpen] = useState(true);
+  const filtersButtonRef = useRef<HTMLButtonElement>(null);
+  const routesButtonRef = useRef<HTMLButtonElement>(null);
+  const filtersOverlayRef = useRef<HTMLDivElement>(null);
+  const listOverlayRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(filtersOverlayRef, { active: filtersOverlayOpen, returnFocusRef: filtersButtonRef });
+  useFocusTrap(listOverlayRef, { active: listOverlayOpen, returnFocusRef: routesButtonRef });
 
   const routesWithPhoto = useMemo(
     () => routes.filter((r) => r.first_photo_id),
@@ -546,6 +554,7 @@ export function Browse() {
         <>
           <div style={{ position: 'absolute', top: '3.5rem', left: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem', pointerEvents: 'auto', zIndex: 500 }}>
             <button
+              ref={filtersButtonRef}
               type="button"
               onClick={() => setFiltersOverlayOpen(true)}
               style={{ ...floatingButtonStyle, flexShrink: 0 }}
@@ -554,6 +563,7 @@ export function Browse() {
               Filters
             </button>
             <button
+              ref={routesButtonRef}
               type="button"
               onClick={() => {
                 listPage.current = 1;
@@ -576,6 +586,7 @@ export function Browse() {
                 onClick={() => setFiltersOverlayOpen(false)}
               />
               <div
+                ref={filtersOverlayRef}
                 role="dialog"
                 aria-modal="true"
                 aria-label="Filter by tags"
@@ -630,6 +641,7 @@ export function Browse() {
                 onClick={() => setListOverlayOpen(false)}
               />
               <div
+                ref={listOverlayRef}
                 role="dialog"
                 aria-modal="true"
                 aria-label="Routes list"

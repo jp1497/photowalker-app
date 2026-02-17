@@ -1,5 +1,6 @@
 /** My Routes: list in closable drawer over full-viewport map. */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getMyRoutes } from '../api/routes';
 import { Loading } from '../components/common/Loading';
@@ -12,12 +13,15 @@ export function MyRoutes() {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(true);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const floatingButtonRef = useRef<HTMLButtonElement>(null);
 
   const mapContext = useMapContext();
   const location = useLocation();
   const navigate = useNavigate();
   const isShellMap = !!mapContext;
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (location.state && typeof location.state === 'object' && 'openDrawer' in location.state && location.state.openDrawer) {
       setDrawerOpen(true);
@@ -44,6 +48,13 @@ export function MyRoutes() {
       });
     return () => { cancelled = true; };
   }, [retryCount]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  useFocusTrap(drawerRef, { active: isShellMap && drawerOpen });
+
+  useEffect(() => {
+    if (!drawerOpen && isShellMap) floatingButtonRef.current?.focus();
+  }, [drawerOpen, isShellMap]);
 
   useEffect(() => {
     if (!isShellMap) return;
@@ -128,6 +139,7 @@ export function MyRoutes() {
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}>
       {!drawerOpen && (
         <button
+          ref={floatingButtonRef}
           type="button"
           onClick={() => setDrawerOpen(true)}
           style={floatingButtonStyle}
@@ -145,6 +157,7 @@ export function MyRoutes() {
             onClick={() => setDrawerOpen(false)}
           />
           <div
+            ref={drawerRef}
             role="dialog"
             aria-modal="true"
             aria-label="My routes"

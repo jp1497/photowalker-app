@@ -1,5 +1,6 @@
 /** Gallery of photos with lightbox. Click photo to open modal. */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { PhotoImage } from './PhotoImage';
 
 /** Minimal shape needed for gallery (id for image + caption). */
@@ -21,6 +22,20 @@ interface PhotoGalleryProps {
 
 export function PhotoGallery({ photos, selectedPhotoId = null, onSelectPhoto, isOwner, onEditLocation }: PhotoGalleryProps) {
   const [modalIndex, setModalIndex] = useState<number | null>(null);
+  const lightboxRef = useRef<HTMLDivElement>(null);
+
+  const closeModal = () => setModalIndex(null);
+
+  useFocusTrap(lightboxRef, { active: modalIndex != null });
+
+  useEffect(() => {
+    if (modalIndex == null) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setModalIndex(null);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [modalIndex]);
 
   const selectedIndex = selectedPhotoId ? photos.findIndex((p) => p.id === selectedPhotoId) : -1;
   const effectiveSelectedIndex = selectedIndex >= 0 ? selectedIndex : null;
@@ -34,7 +49,6 @@ export function PhotoGallery({ photos, selectedPhotoId = null, onSelectPhoto, is
     setModalIndex(index);
     onSelectPhoto?.(photos[index].id);
   };
-  const closeModal = () => setModalIndex(null);
 
   if (photos.length === 0) {
     return <p style={{ color: '#666' }}>No photos yet.</p>;
@@ -84,6 +98,7 @@ export function PhotoGallery({ photos, selectedPhotoId = null, onSelectPhoto, is
 
       {modalIndex != null && (
         <div
+          ref={lightboxRef}
           role="dialog"
           aria-modal="true"
           aria-label="Photo lightbox"

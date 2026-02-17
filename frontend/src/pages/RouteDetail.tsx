@@ -1,5 +1,6 @@
 /** Route detail page. Map full viewport; metadata and gallery in closable panel. */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { Link, useParams } from 'react-router-dom';
 import { updatePhoto } from '../api/photos';
 import { getRouteBySlug } from '../api/routes';
@@ -30,6 +31,19 @@ export function RouteDetail() {
   const [detailsPanelOpen, setDetailsPanelOpen] = useState(true);
   const { center: mapCenter } = usePreferredMapCenter();
   const isShellMap = !!mapContext;
+  const detailsPanelRef = useRef<HTMLDivElement>(null);
+  const floatingButtonRef = useRef<HTMLButtonElement>(null);
+  const editLocationModalRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(detailsPanelRef, {
+    active: isShellMap && detailsPanelOpen && !editingPhotoId,
+  });
+
+  useFocusTrap(editLocationModalRef, { active: !!editingPhotoId });
+
+  useEffect(() => {
+    if (!detailsPanelOpen && isShellMap && !editingPhotoId) floatingButtonRef.current?.focus();
+  }, [detailsPanelOpen, isShellMap, editingPhotoId]);
 
   useEffect(() => {
     if (!data) return;
@@ -233,6 +247,7 @@ export function RouteDetail() {
         </p>
         {editingPhotoId && (
           <div
+            ref={editLocationModalRef}
             role="dialog"
             aria-modal="true"
             aria-label="Edit photo location"
@@ -364,6 +379,7 @@ export function RouteDetail() {
     >
       {!detailsPanelOpen && (
         <button
+          ref={floatingButtonRef}
           type="button"
           onClick={() => setDetailsPanelOpen(true)}
           style={floatingButtonStyle}
@@ -374,6 +390,7 @@ export function RouteDetail() {
       )}
       {detailsPanelOpen && (
         <div
+          ref={detailsPanelRef}
           role="dialog"
           aria-modal="true"
           aria-label="Route details"
@@ -436,6 +453,7 @@ export function RouteDetail() {
       )}
       {editingPhotoId && (
         <div
+          ref={editLocationModalRef}
           role="dialog"
           aria-modal="true"
           aria-label="Edit photo location"

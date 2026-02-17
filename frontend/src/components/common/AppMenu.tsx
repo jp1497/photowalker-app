@@ -1,5 +1,6 @@
 /** Minimal app menu: trigger button opens popup with nav links and Sign in/out. */
 import { useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -12,6 +13,8 @@ export function AppMenu() {
   const [open, setOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useFocusTrap(popupRef, { active: open, returnFocusRef: triggerRef });
 
   useEffect(() => {
     if (!open) return;

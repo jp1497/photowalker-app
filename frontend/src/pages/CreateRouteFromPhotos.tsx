@@ -11,6 +11,7 @@ import { useMapContext } from '../contexts/MapContext';
 import { uploadPhoto, updatePhoto, getPhotoImageUrl } from '../api/photos';
 import { apiClient } from '../api/client';
 import { createRouteFromPhotos } from '../api/routes';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { usePreferredMapCenter } from '../hooks/usePreferredMapCenter';
 import type { Photo } from '../types/photo';
 import type { RouteFromPhotosPayload } from '../types/route';
@@ -100,6 +101,9 @@ export function CreateRouteFromPhotos() {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const floatingButtonRef = useRef<HTMLButtonElement>(null);
+  const placePhotoModalRef = useRef<HTMLDivElement>(null);
   const thumbnailUrlsRef = useRef<Record<string, string>>({});
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -352,11 +356,26 @@ export function CreateRouteFromPhotos() {
   useEffect(() => {
     if (!isShellMap) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !photoToPlace) setDrawerOpen(false);
+      if (e.key === 'Escape') {
+        if (photoToPlace) {
+          setPhotoToPlace(null);
+          setPickedCoords(null);
+          setPlaceError(null);
+        } else {
+          setDrawerOpen(false);
+        }
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isShellMap, photoToPlace]);
+
+  useFocusTrap(drawerRef, { active: isShellMap && drawerOpen && !photoToPlace });
+  useFocusTrap(placePhotoModalRef, { active: !!photoToPlace });
+
+  useEffect(() => {
+    if (!drawerOpen && isShellMap && !photoToPlace) floatingButtonRef.current?.focus();
+  }, [drawerOpen, isShellMap, photoToPlace]);
 
   const drawerTop = '6rem';
   const floatingButtonStyle = {
@@ -573,6 +592,7 @@ export function CreateRouteFromPhotos() {
 
   const placePhotoModal = photoToPlace ? (
     <div
+      ref={placePhotoModalRef}
       role="dialog"
       aria-modal="true"
       aria-label="Place photo on map"
@@ -671,6 +691,7 @@ export function CreateRouteFromPhotos() {
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}>
       {!drawerOpen && (
         <button
+          ref={floatingButtonRef}
           type="button"
           onClick={() => setDrawerOpen(true)}
           style={floatingButtonStyle}
@@ -688,6 +709,7 @@ export function CreateRouteFromPhotos() {
             onClick={() => setDrawerOpen(false)}
           />
           <div
+            ref={drawerRef}
             role="dialog"
             aria-modal="true"
             aria-label="Create route"

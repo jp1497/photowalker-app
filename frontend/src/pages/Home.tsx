@@ -1,6 +1,7 @@
 /** Home: map with dismissible welcome/CTA overlay. */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useAuth } from '../hooks/useAuth';
 import { useMapContext } from '../contexts/MapContext';
 
@@ -9,6 +10,10 @@ export function Home() {
   const mapContext = useMapContext();
   const [ctaDismissed, setCtaDismissed] = useState(false);
   const isShellMap = !!mapContext;
+  const ctaRef = useRef<HTMLDivElement>(null);
+  const floatingButtonRef = useRef<HTMLButtonElement>(null);
+
+  useFocusTrap(ctaRef, { active: isShellMap && !ctaDismissed });
 
   useEffect(() => {
     if (!isShellMap) return;
@@ -18,6 +23,10 @@ export function Home() {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isShellMap]);
+
+  useEffect(() => {
+    if (ctaDismissed && isShellMap) floatingButtonRef.current?.focus();
+  }, [ctaDismissed, isShellMap]);
 
   if (!isShellMap) {
     return (
@@ -61,6 +70,7 @@ export function Home() {
     return (
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}>
         <button
+          ref={floatingButtonRef}
           type="button"
           onClick={() => setCtaDismissed(false)}
           style={{
@@ -88,7 +98,9 @@ export function Home() {
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}>
       <div
+        ref={ctaRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Welcome"
         style={{
           position: 'absolute',

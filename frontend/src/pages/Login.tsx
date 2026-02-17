@@ -1,5 +1,6 @@
 /** Login: Sign in with Google. Renders as overlay over map when inside map layout. */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { login, loginWithTestSecret, REDIRECT_KEY } from '../api/auth';
 import { authStore } from '../store/authStore';
@@ -11,6 +12,7 @@ const E2E_SECRET = import.meta.env.VITE_E2E_SECRET ?? '';
 export function Login() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const redirect = searchParams.get('redirect');
   const [e2eError, setE2eError] = useState<string | null>(null);
   const mapContext = useMapContext();
@@ -41,6 +43,8 @@ export function Login() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isOverMap, handleClose]);
 
+  useFocusTrap(dialogRef, { active: isOverMap });
+
   const handleTestLogin = async () => {
     if (!E2E_SECRET) return;
     setE2eError(null);
@@ -61,6 +65,7 @@ export function Login() {
     return (
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}>
         <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-label="Sign in"
