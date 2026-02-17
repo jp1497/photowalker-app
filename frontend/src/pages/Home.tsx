@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useAuth } from '../hooks/useAuth';
 import { useMapContext } from '../contexts/MapContext';
+import { OverlayCard } from '../components/common/OverlayCard';
 
 export function Home() {
   const { user, isAuthenticated } = useAuth();
@@ -98,49 +99,21 @@ export function Home() {
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}>
       <div
-        ref={ctaRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Welcome"
         style={{
           position: 'absolute',
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          padding: '1.25rem 2rem 2rem',
-          maxWidth: 480,
-          width: '90vw',
-          background: 'rgba(255,255,255,0.97)',
-          borderRadius: 12,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-          textAlign: 'center',
           pointerEvents: 'auto',
           zIndex: 100,
         }}
       >
-        <div style={{ position: 'relative', marginBottom: '0.5rem' }}>
-          <h1 style={{ fontSize: '2rem', margin: 0, textAlign: 'center' }}>photowalker</h1>
-          <button
-            type="button"
-            onClick={() => setCtaDismissed(true)}
-            aria-label="Close"
-            style={{
-              position: 'absolute',
-              right: 0,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              background: 'none',
-              border: 'none',
-              fontSize: '1.5rem',
-              cursor: 'pointer',
-              color: '#6b7280',
-              lineHeight: 1,
-              padding: 0,
-            }}
-          >
-            ×
-          </button>
-        </div>
+        <OverlayCard
+          ref={ctaRef}
+          title="photowalker"
+          onClose={() => setCtaDismissed(true)}
+          aria-label="Welcome"
+        >
         <p style={{ fontSize: '1.125rem', color: '#6b7280', marginBottom: '1.5rem', lineHeight: 1.6 }}>
           create photowalks, share them with others and discover a new side of your city
         </p>
@@ -217,6 +190,7 @@ export function Home() {
             </p>
           </>
         )}
+        </OverlayCard>
       </div>
     </div>
   );

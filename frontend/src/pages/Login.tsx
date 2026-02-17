@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { login, loginWithTestSecret, REDIRECT_KEY } from '../api/auth';
 import { authStore } from '../store/authStore';
 import { useMapContext } from '../contexts/MapContext';
+import { OverlayCard } from '../components/common/OverlayCard';
 
 const E2E_MODE = import.meta.env.VITE_E2E_MODE === 'true';
 const E2E_SECRET = import.meta.env.VITE_E2E_SECRET ?? '';
@@ -81,36 +82,11 @@ export function Login() {
           }}
           onClick={(e) => e.target === e.currentTarget && handleClose()}
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: '#fff',
-              borderRadius: 12,
-              padding: '2rem',
-              maxWidth: 400,
-              width: '90vw',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-              textAlign: 'center',
-            }}
+          <OverlayCard
+            title="photowalker"
+            onClose={handleClose}
+            variant="card"
           >
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '-0.5rem' }}>
-              <button
-                type="button"
-                onClick={handleClose}
-                aria-label="Close"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '1.5rem',
-                  cursor: 'pointer',
-                  color: '#6b7280',
-                  lineHeight: 1,
-                }}
-              >
-                ×
-              </button>
-            </div>
-            <h1 style={{ fontSize: '1.75rem', marginTop: 0, marginBottom: '0.5rem' }}>Photowalker</h1>
             <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>Sign in to create and share photowalk routes.</p>
             <button
               type="button"
@@ -145,7 +121,7 @@ export function Login() {
                 {e2eError && <p style={{ color: '#c00', marginTop: '0.5rem' }}>{e2eError}</p>}
               </div>
             )}
-          </div>
+          </OverlayCard>
         </div>
       </div>
     );
