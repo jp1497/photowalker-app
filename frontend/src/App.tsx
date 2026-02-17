@@ -64,10 +64,10 @@ function App() {
     <BrowserRouter>
       <AppMenu />
       <Routes>
-        <Route path="/login" element={<Login />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route element={<MapShellLayout />}>
           <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
           <Route path="/browse" element={<Browse />} />
           <Route
             path="/routes/me"
