@@ -521,6 +521,10 @@ export function Browse() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isShellMap]);
 
+  useEffect(() => {
+    if (!listOverlayOpen && isShellMap) routesButtonRef.current?.focus();
+  }, [listOverlayOpen, isShellMap]);
+
   const handleListRouteClick = useCallback((slug: string) => {
     setListOverlayOpen(false);
     navigate(`/routes/${slug}`);
@@ -539,8 +543,8 @@ export function Browse() {
     pointerEvents: 'auto' as const,
   };
 
-  /** List overlay starts below buttons (3.5rem) + 2 buttons + gap (~2rem) + spacing (~0.5rem) = 6rem. */
-  const listOverlayTop = '6rem';
+  /** List overlay starts below menu row (0.75rem + ~2.25rem) + small gap = 3.25rem. */
+  const listOverlayTop = '3.5rem';
 
   return (
     <div
@@ -552,7 +556,7 @@ export function Browse() {
     >
       {isShellMap ? (
         <>
-          <div style={{ position: 'absolute', top: '3.5rem', left: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem', pointerEvents: 'auto', zIndex: 500 }}>
+          <div style={{ position: 'absolute', top: '1rem', right: '5rem', pointerEvents: 'auto', zIndex: 500 }}>
             <button
               ref={filtersButtonRef}
               type="button"
@@ -562,19 +566,23 @@ export function Browse() {
             >
               Filters
             </button>
-            <button
-              ref={routesButtonRef}
-              type="button"
-              onClick={() => {
-                listPage.current = 1;
-                fetchList();
-                setListOverlayOpen(true);
-              }}
-              style={{ ...floatingButtonStyle, flexShrink: 0 }}
-              aria-label="Open routes"
-            >
-              Routes
-            </button>
+          </div>
+          <div style={{ position: 'absolute', top: '3.5rem', left: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem', pointerEvents: 'auto', zIndex: 500 }}>
+            {!listOverlayOpen && (
+              <button
+                ref={routesButtonRef}
+                type="button"
+                onClick={() => {
+                  listPage.current = 1;
+                  fetchList();
+                  setListOverlayOpen(true);
+                }}
+                style={{ ...floatingButtonStyle, flexShrink: 0 }}
+                aria-label="Open routes"
+              >
+                Routes
+              </button>
+            )}
           </div>
 
           {filtersOverlayOpen && (
@@ -592,8 +600,8 @@ export function Browse() {
                 aria-label="Filter by tags"
                 style={{
                   position: 'absolute',
-                  top: '5rem',
-                  left: '0.75rem',
+                  top: '4rem',
+                  right: '1rem',
                   zIndex: 302,
                   minWidth: 260,
                   padding: '1rem',
@@ -652,7 +660,7 @@ export function Browse() {
                   right: '0.75rem',
                   bottom: '0.75rem',
                   maxWidth: 400,
-                  maxHeight: 'calc(100vh - 6.75rem)',
+                  maxHeight: 'calc(100vh - 4rem)',
                   display: 'flex',
                   flexDirection: 'column',
                   background: '#fff',

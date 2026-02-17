@@ -144,9 +144,6 @@ describe('Browse', () => {
     );
 
     expect(screen.getByRole('button', { name: /open filters/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /open routes/i })).toBeTruthy();
-
-    await userEvent.click(screen.getByRole('button', { name: /open routes/i }));
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: /routes list/i })).toBeTruthy();
     });
