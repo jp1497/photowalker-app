@@ -531,6 +531,9 @@ export function Browse() {
     pointerEvents: 'auto' as const,
   };
 
+  /** List overlay starts below buttons (3.5rem) + 2 buttons + gap (~2rem) + spacing (~0.5rem) = 6rem. */
+  const listOverlayTop = '6rem';
+
   return (
     <div
       style={
@@ -632,12 +635,12 @@ export function Browse() {
                 aria-label="Routes list"
                 style={{
                   position: 'absolute',
-                  top: '3.5rem',
+                  top: listOverlayTop,
                   left: '0.75rem',
                   right: '0.75rem',
                   bottom: '0.75rem',
                   maxWidth: 400,
-                  maxHeight: 'calc(100vh - 5rem)',
+                  maxHeight: 'calc(100vh - 9.75rem)',
                   display: 'flex',
                   flexDirection: 'column',
                   background: '#fff',

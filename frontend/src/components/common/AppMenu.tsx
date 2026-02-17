@@ -109,7 +109,8 @@ export function AppMenu() {
                 <>
                   <Link
                     to="/routes/me"
-                    onClick={() => closeAndNavigate('/routes/me')}
+                    state={{ openDrawer: true }}
+                    onClick={() => setOpen(false)}
                     style={{ padding: '0.5rem 1rem', textDecoration: 'none', color: 'inherit', textAlign: 'left' }}
                   >
                     My routes
