@@ -5,6 +5,11 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import maplibregl from 'maplibre-gl';
 import { getBrowseRoutes } from '../api/routes';
 import { fetchPhotoImageBlob } from '../api/photos';
+import {
+  CLUSTER_MAX_ZOOM,
+  CLUSTER_MIN_POINTS,
+  CLUSTER_RADIUS,
+} from '../components/map/clusterConfig';
 import { MapPanel } from '../components/map/MapPanel';
 import { MapView } from '../components/map/MapView';
 import { RouteList } from '../components/routes/RouteList';
@@ -22,9 +27,6 @@ type ViewMode = 'map' | 'list';
 const ROUTES_SOURCE_ID = 'browse-routes';
 const CLUSTER_LAYER_ID = 'browse-routes-clusters';
 const UNCLUSTERED_LAYER_ID = 'browse-routes-unclustered';
-const CLUSTER_MAX_ZOOM = 14;
-/** Smaller radius than photo clustering so routes only group when very close. */
-const CLUSTER_RADIUS = 28;
 const CLUSTER_STACK_SIZE = 44;
 const CLUSTER_STACK_OFFSET = 5;
 const CLUSTER_STACK_MAX_IMAGES = 5;
@@ -49,6 +51,18 @@ function pointCoordinates(geom: GeoJSON.Geometry): [number, number] | null {
     return [geom.coordinates[0], geom.coordinates[1]];
   }
   return null;
+}
+
+/** Geographic centroid of leaf points; stable across zoom so markers do not jump. */
+function computeClusterCentroid(coords: [number, number][]): [number, number] | null {
+  if (coords.length === 0) return null;
+  let sumLng = 0;
+  let sumLat = 0;
+  for (const [lng, lat] of coords) {
+    sumLng += lng;
+    sumLat += lat;
+  }
+  return [sumLng / coords.length, sumLat / coords.length];
 }
 
 function buildRoutesGeoJSON(routes: Route[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
@@ -128,6 +142,7 @@ export function Browse() {
   const [mapBbox, setMapBbox] = useState<string | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const clusterMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const clusterUpdateRunRef = useRef(0);
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const thumbnailUrlsRef = useRef<Record<string, string>>({});
   const listPage = useRef(1);
@@ -306,15 +321,21 @@ export function Browse() {
         : () => Promise.resolve<GeoJSON.Feature<GeoJSON.Point>[]>([]);
 
     const clusterFeatures = map.queryRenderedFeatures({ layers: [CLUSTER_LAYER_ID] });
+    const seenIds = new Set<number>();
     const dist2 = (a: [number, number], b: [number, number]) =>
       (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
 
+    const runId = ++clusterUpdateRunRef.current;
+
     clusterFeatures.forEach((feature) => {
       const clusterId = feature.properties?.cluster_id as number | undefined;
-      const center = pointCoordinates(feature.geometry as GeoJSON.Point);
-      if (clusterId == null || !center) return;
+      const fallbackCenter = pointCoordinates(feature.geometry as GeoJSON.Point);
+      if (clusterId == null || !fallbackCenter) return;
+      if (seenIds.has(clusterId)) return;
+      seenIds.add(clusterId);
 
       getLeaves(clusterId).then((leaves) => {
+        if (clusterUpdateRunRef.current !== runId) return;
         if (!map.getSource(ROUTES_SOURCE_ID)) return;
         const withCoords = leaves
           .map((f) => {
@@ -323,6 +344,7 @@ export function Browse() {
             return c && props ? { slug: props.slug ?? '', firstPhotoId: props.firstPhotoId ?? null, coords: c } : null;
           })
           .filter((x): x is { slug: string; firstPhotoId: string | null; coords: [number, number] } => x !== null);
+        const center = computeClusterCentroid(withCoords.map((x) => x.coords)) ?? fallbackCenter;
         withCoords.sort((a, b) => dist2(a.coords, center) - dist2(b.coords, center));
         const entries = withCoords.map((x) => ({ slug: x.slug, firstPhotoId: x.firstPhotoId }));
 
@@ -392,6 +414,7 @@ export function Browse() {
         cluster: true,
         clusterMaxZoom: CLUSTER_MAX_ZOOM,
         clusterRadius: CLUSTER_RADIUS,
+        clusterMinPoints: CLUSTER_MIN_POINTS,
       });
       const defaultPin = createDefaultPinImageData();
       if (!mapApi.hasImage('default-pin')) {
@@ -455,10 +478,12 @@ export function Browse() {
     const onIdle = () => updateClusterMarkers(mapApi);
     mapApi.on('idle', onIdle);
     mapApi.on('moveend', onIdle);
+    mapApi.on('zoomend', onIdle);
 
     return () => {
       mapApi.off('idle', onIdle);
       mapApi.off('moveend', onIdle);
+      mapApi.off('zoomend', onIdle);
       clusterMarkersRef.current.forEach((m) => {
         try { m.remove(); } catch { /* ignore */ }
       });
