@@ -2,6 +2,7 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { getCustomizedStyle, getMapStyleUrl } from '../../map/mapStyles';
 
 const DEFAULT_CENTER: [number, number] = [-122.42, 37.78];
 const DEFAULT_ZOOM = 12;
@@ -25,38 +26,39 @@ export function MapView({ center = DEFAULT_CENTER, zoom = DEFAULT_ZOOM, style, o
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          'osm-tiles': {
-            type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '&copy; OpenStreetMap contributors',
-          },
-        },
-        layers: [
-          {
-            id: 'osm-layer',
-            type: 'raster',
-            source: 'osm-tiles',
-            minzoom: 0,
-            maxzoom: 19,
-          },
-        ],
-      },
-      center: initialCenterRef.current,
-      zoom: initialZoomRef.current,
-    });
-    mapRef.current = map;
-    map.on('load', () => {
-      onMapReadyRef.current?.(map);
-    });
-    return () => {
+    let cancelled = false;
+
+    async function initMap() {
+      if (!containerRef.current || cancelled) return;
+
+      let mapStyle: maplibregl.StyleSpecification | string;
       try {
-        map.remove();
+        mapStyle = await getCustomizedStyle();
+      } catch (err) {
+        console.warn('Failed to load customized style, falling back to default:', err);
+        mapStyle = getMapStyleUrl();
+      }
+
+      if (cancelled || !containerRef.current) return;
+
+      const map = new maplibregl.Map({
+        container: containerRef.current,
+        style: mapStyle,
+        center: initialCenterRef.current,
+        zoom: initialZoomRef.current,
+      });
+      mapRef.current = map;
+      map.on('load', () => {
+        onMapReadyRef.current?.(map);
+      });
+    }
+
+    initMap();
+
+    return () => {
+      cancelled = true;
+      try {
+        mapRef.current?.remove();
       } catch {
         /* defensive teardown */
       }

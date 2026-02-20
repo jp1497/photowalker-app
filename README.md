@@ -56,7 +56,7 @@ Verify PostGIS: `docker compose exec postgres psql -U photowalker -d photowalker
 Configure environment:
 
 - `backend/`: Copy `.env.example` to `.env` and fill in values
-- `frontend/`: Copy `.env.example` to `.env.local` and set `VITE_API_URL`
+- `frontend/`: Copy `.env.example` to `.env.local` and set `VITE_API_URL`. The map uses [OpenFreeMap](https://openfreemap.org/) vector tiles (free, no API key required).
 
 See [Step 0.2: Development Environment](./Design/IMPLEMENTATION_ROADMAP.md#step-02-development-environment) for details.
 
