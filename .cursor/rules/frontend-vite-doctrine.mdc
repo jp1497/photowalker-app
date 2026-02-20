@@ -21,6 +21,18 @@ alwaysApply: false
 - When a map and a map control (e.g. MapboxDraw, custom overlay) live in **sibling components**, React effect cleanup order between them is **undefined**. The map container may run `map.remove()` before the control runs `map.removeControl(control)`; the control's `onRemove` can then run against an already-destroyed map and throw (e.g. "Cannot read properties of null (reading 'off')").
 - **Defensive teardown:** Wrap control cleanup (listener removal, `removeControl`) in try/catch. Clear your own refs after the try block so cleanup remains idempotent. Alternatively, coordinate so the control is removed before the map is destroyed (e.g. single owner that removes control then map).
 
+## Map Basemap and Style Loading
+
+- **Async style with fallback:** When the map style is loaded asynchronously (e.g. fetch remote style and mutate, or programmatic build), **provide a fallback** (e.g. plain style URL or minimal style) so the map still renders if the request fails or the style builder throws. MapView should try/catch the style loader and use the fallback on error so the app does not white-screen.
+- **Single style entry point:** Keep the basemap provider behind **one style API** (e.g. `getCustomizedStyle()` or `getMapStyleUrl()`). MapView should not branch on provider or import provider-specific modules; switching providers (e.g. Protomaps to OpenFreeMap) then only touches the style module and keeps MapView stable.
+
+## Map Style and POI Customization
+
+- When customizing **vector map styles** or **POI filters** (e.g. excluding classes, stripping layers), **verify layer ids and data fields** against the actual style payload or tile schema (fetched style JSON, OpenMapTiles schema), not assumptions. Wrong class names or layer ids lead to filters that hide nothing or strip the wrong layers.
+- When **mutating a fetched remote style** (e.g. removing layers by id, splicing in custom layers), **verify the expected structure** (source name, layer id prefixes, insert index such as `place_*`) so customization logic remains valid if the provider updates their style; document assumptions in a comment or in the style module.
+- When the user asks to **remove a map feature** (e.g. "parking signs") that could be drawn from more than one source, consider both: (a) POI layer with a given class — add that class to exclusion filters; (b) a dedicated style layer — strip layers whose id matches (e.g. contains a relevant substring). Handle both so the feature is fully removed.
+- When **filtering style layers by substring** (e.g. remove layers whose id contains `"parking"`), verify that similar ids do not accidentally match (e.g. `"park"` does not contain `"parking"`), so unrelated layers (e.g. park fill) are not removed.
+
 ## White Screen / No Visible Error
 
 - When the user reports a white page with no error message, the failure is often an uncaught exception that only appears in the console or is swallowed by the framework. **Immediately add:** (1) a root error boundary that catches render errors and displays them on the page, and (2) bootstrap-level handling (e.g. try/catch around createRoot/render, or onUncaughtError) so the real error is shown in the UI. Then reproduce; the next failure will be visible and debuggable.

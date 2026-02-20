@@ -6,6 +6,10 @@
 **Previous Version:** [PRD v4](./PRD_v4.md) (Map-First Frontend Overhaul)  
 **Scope:** Frontend map basemap styling only; assumes v4 layout. Backend unchanged.
 
+### Implementation divergence (2026)
+
+During development and quick iteration, the **implemented** basemap diverged from this plan. The app now uses **[OpenFreeMap](https://openfreemap.org/)** vector tiles (Liberty and other styles) with **no API key**, instead of the Protomaps programmatic style and Flavor described below. The frontend fetches the remote style from OpenFreeMap, mutates it (e.g. custom POI layers), and passes it to MapLibre; the single-style-entry-point and async-style-with-fallback patterns from this PRD are still in use. This document remains the original design reference; for current setup see the main README and `frontend/src/map/`.
+
 ---
 
 ## Table of Contents
