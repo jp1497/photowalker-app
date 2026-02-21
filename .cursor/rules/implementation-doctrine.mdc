@@ -57,6 +57,14 @@ After **in-process mutations** to an ordered relationship (e.g. reordering or de
 
 When a **service** enforces invariants (e.g. "route distance must be > 0" or "photos must not all be at the same point"), **integration tests** that hit that code path must supply data that satisfies those invariants. For example, if the service builds a route from two photo locations, use two distinct coordinates (e.g. different lat/lng per photo) so the computed distance is non-zero. Mock or fixture data that violates the invariant will cause the service to raise and the test to fail even when the API contract is correct.
 
+## Database Test Isolation and Shared State
+
+When writing tests that **query the database** (e.g. list/browse endpoints), establish whether the test DB is **shared** and whether other tests commit. In this project, the default `db_session` fixture rolls back only its own transaction; integration tests and other sessions may commit. A test that assumes "only my data exists" (e.g. `assert total == 1`) will fail when run alongside others. Either: **(a)** Assert on the **presence or absence of the specific entities** the test created (e.g. "our record id is in the result" / "our record id is not in the result"), so tests remain valid with shared state; or **(b)** Use isolation (e.g. a fixture that truncates the relevant tables before the test) when exact counts or strict isolation are required. Prefer (a) unless the test explicitly needs exact totals.
+
+## Verification When Tests Cannot Be Run
+
+If the execution environment **cannot run the project's test suite** (e.g. venv not activated, pytest/uv not on PATH), **do not claim that tests pass**. State explicitly that tests could not be executed, give the exact commands the user should run to verify (e.g. `cd backend && pytest tests/unit/... -v -k '...'`), and treat the implementation as unverified until the user confirms. Delivering code without running tests is acceptable when the environment blocks execution; claiming verification without execution is not.
+
 ## Geometry and Serialization in Tests
 
 When asserting on GeoJSON coordinates from geometry (e.g. Shapely `mapping(to_shape(geom))` or similar), the serialized coordinates may be **tuples**, not lists. Tests that compare to list literals (e.g. `assert coords[0] == [-122.4, 37.8]`) can fail due to type mismatch. Use `list(geom["coordinates"][i])` in the assertion, or assert tuple equality, so the comparison is consistent with the actual serialized type.

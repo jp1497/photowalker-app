@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { Loading } from './components/common/Loading';
@@ -9,7 +9,6 @@ import { MapShell } from './components/map/MapShell';
 import { AuthCallback } from './pages/AuthCallback';
 import { Browse } from './pages/Browse';
 import { CreateRouteFromPhotos } from './pages/CreateRouteFromPhotos';
-import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { MyRoutes } from './pages/MyRoutes';
 import { NotFound } from './pages/NotFound';
@@ -66,7 +65,7 @@ function App() {
       <Routes>
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route element={<MapShellLayout />}>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Navigate to="/browse" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/browse" element={<Browse />} />
           <Route
