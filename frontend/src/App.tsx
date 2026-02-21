@@ -4,6 +4,7 @@ import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { Loading } from './components/common/Loading';
 import { Toast } from './components/common/Toast';
+import { AccountIcon } from './components/common/AccountIcon';
 import { AppMenu } from './components/common/AppMenu';
 import { MapShell } from './components/map/MapShell';
 import { AuthCallback } from './pages/AuthCallback';
@@ -13,6 +14,7 @@ import { Login } from './pages/Login';
 import { MyRoutes } from './pages/MyRoutes';
 import { NotFound } from './pages/NotFound';
 import { RouteDetail } from './pages/RouteDetail';
+import { Settings } from './pages/Settings';
 import './App.css';
 
 function MapShellLayout() {
@@ -62,12 +64,14 @@ function App() {
   return (
     <BrowserRouter>
       <AppMenu />
+      <AccountIcon />
       <Routes>
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route element={<MapShellLayout />}>
           <Route path="/" element={<Navigate to="/browse" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/browse" element={<Browse />} />
+          <Route path="/settings" element={<Settings />} />
           <Route
             path="/routes/me"
             element={
