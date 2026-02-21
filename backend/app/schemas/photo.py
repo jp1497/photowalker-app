@@ -41,6 +41,33 @@ class PhotoResponse(BaseModel):
         return _point_to_geojson(v)
 
 
+class PhotoBrowseUser(BaseModel):
+    """User summary in photo browse list. PRD v6 - photos-in-bbox."""
+
+    id: UUID
+    name: str
+
+
+class PhotoBrowseItem(BaseModel):
+    """Photo item for GET /v1/photos (photos-in-bbox). Map pins and lightbox. PRD v6 - Step 0.1."""
+
+    id: UUID
+    caption: Optional[str] = None
+    user: PhotoBrowseUser
+    route_ids: list[UUID] = Field(default_factory=list, description="Route IDs that contain this photo")
+    image_url: str = Field(description="Path to image: GET /v1/photos/{id}/image (supports ?size=thumbnail)")
+    location: Optional[dict[str, Any]] = None
+
+    @field_validator("location", mode="before")
+    @classmethod
+    def serialize_location(cls, v: Any) -> Optional[dict[str, Any]]:
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        return _point_to_geojson(v)
+
+
 def _validate_geojson_point(v: dict[str, Any]) -> tuple[float, float]:
     """Validate GeoJSON Point; return (lon, lat). Raises ValueError if invalid."""
     if not isinstance(v, dict):

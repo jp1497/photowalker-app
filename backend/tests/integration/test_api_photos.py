@@ -359,3 +359,107 @@ def test_delete_photos_enforces_ownership() -> None:
         assert del_resp.json()["error"]["code"] == "FORBIDDEN"
     finally:
         app.dependency_overrides.pop(get_settings, None)
+
+
+# --- GET /v1/photos (photos-in-bbox). PRD v6 - Step 0.1 ---
+
+
+@requires_postgres
+def test_get_v1_photos_with_bbox_returns_photos_and_pagination() -> None:
+    """GET /v1/photos?bbox=... returns photos in bbox with pagination. No auth required."""
+    from unittest.mock import patch
+    settings = _photo_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        user, token = _create_user_and_token_sync(settings)
+        with TestClient(app) as client:
+            create_resp = client.post(
+                "/v1/routes",
+                headers={"Authorization": f"Bearer {token}"},
+                json=_valid_route_payload(),
+            )
+            assert create_resp.status_code == 201
+            route_id = create_resp.json()["route"]["id"]
+            with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
+                with patch("app.services.photo_service.extract_captured_at", return_value=None):
+                    upload_resp = client.post(
+                        "/v1/photos",
+                        headers={"Authorization": f"Bearer {token}"},
+                        files={"file": ("photo.jpg", MINIMAL_JPEG, "image/jpeg")},
+                        data={"caption": "Bbox photo", "route_ids": f'["{route_id}"]'},
+                    )
+            assert upload_resp.status_code == 201
+            response = client.get(
+                "/v1/photos?bbox=-122.42,37.78,-122.38,37.84"
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert "photos" in data
+        assert "pagination" in data
+        pagination = data["pagination"]
+        assert pagination["page"] == 1
+        assert pagination["per_page"] == 20
+        assert pagination["total"] >= 1
+        photos = data["photos"]
+        assert len(photos) >= 1
+        photo = next((p for p in photos if p.get("caption") == "Bbox photo"), photos[0])
+        assert "id" in photo
+        assert "caption" in photo
+        assert "user" in photo
+        assert photo["user"]["id"] == str(user.id)
+        assert photo["user"]["name"] == user.name
+        assert "route_ids" in photo
+        assert str(route_id) in photo["route_ids"]
+        assert photo["image_url"] == f"/v1/photos/{photo['id']}/image"
+        assert "location" in photo
+        assert photo["location"]["type"] == "Point"
+        assert len(photo["location"]["coordinates"]) == 2
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_get_v1_photos_bbox_too_large_returns_400() -> None:
+    """GET /v1/photos?bbox=... with area > 200 km² returns 400."""
+    settings = _photo_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        with TestClient(app) as client:
+            response = client.get("/v1/photos?bbox=-122.5,37.0,-121.5,38.0")
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+        assert "200 km²" in response.json()["error"]["message"]
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_get_v1_photos_invalid_bbox_returns_400() -> None:
+    """GET /v1/photos with invalid bbox returns 400."""
+    settings = _photo_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        with TestClient(app) as client:
+            response = client.get("/v1/photos?bbox=invalid")
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_get_v1_photos_missing_bbox_returns_400() -> None:
+    """GET /v1/photos without bbox returns 400 (validation: required query param)."""
+    settings = _photo_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        with TestClient(app) as client:
+            response = client.get("/v1/photos")
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
