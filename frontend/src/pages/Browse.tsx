@@ -18,6 +18,8 @@ import {
   createDefaultPinImageData,
   imageToPinImageData,
 } from '../components/map/pinImageUtils';
+import { getWelcomeDismissed, WelcomeModal } from '../components/common/WelcomeModal';
+import { useAuth } from '../hooks/useAuth';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { usePreferredMapCenter } from '../hooks/usePreferredMapCenter';
 import type { Route } from '../types/route';
@@ -133,7 +135,9 @@ function createRouteClusterStackElement(
 export function Browse() {
   const navigate = useNavigate();
   const mapContext = useMapContext();
+  const { isAuthenticated } = useAuth();
   const { center: mapCenter, zoom: mapZoom } = usePreferredMapCenter();
+  const [welcomeDismissed, setWelcomeDismissed] = useState(() => getWelcomeDismissed());
   const [viewMode, setViewMode] = useState<ViewMode>('map');
   const [routes, setRoutes] = useState<Route[]>([]);
   const [pagination, setPagination] = useState({ page: 1, per_page: 20, total: 0 });
@@ -571,6 +575,8 @@ export function Browse() {
   /** List overlay starts below menu row (0.75rem + ~2.25rem) + small gap = 3.25rem. */
   const listOverlayTop = '3.5rem';
 
+  const showWelcomeModal = !isAuthenticated && !welcomeDismissed;
+
   return (
     <div
       style={
@@ -579,6 +585,7 @@ export function Browse() {
           : { padding: '1rem', display: 'flex', flexDirection: 'column' }
       }
     >
+      <WelcomeModal open={showWelcomeModal} onDismiss={() => setWelcomeDismissed(true)} />
       {isShellMap ? (
         <>
           <div style={{ position: 'absolute', top: '1rem', right: '5rem', pointerEvents: 'auto', zIndex: 500 }}>

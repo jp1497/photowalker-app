@@ -1,4 +1,4 @@
-/** Unit tests for Browse: bbox fetch from map, list view pagination. */
+/** Unit tests for Browse: bbox fetch from map, list view pagination, welcome modal. */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -6,8 +6,11 @@ import { MemoryRouter } from 'react-router-dom';
 import type { Route } from '../types/route';
 import { Browse } from './Browse';
 import * as routesApi from '../api/routes';
+import * as useAuth from '../hooks/useAuth';
+import * as WelcomeModalModule from '../components/common/WelcomeModal';
 
 vi.mock('../api/routes');
+vi.mock('../hooks/useAuth');
 vi.mock('../hooks/usePreferredMapCenter', () => ({
   usePreferredMapCenter: () => ({ center: [-122.42, 37.78], zoom: 12 }),
 }));
@@ -77,6 +80,13 @@ describe('Browse', () => {
     vi.mocked(routesApi.getBrowseRoutes).mockResolvedValue({
       routes: mockRoutes,
       pagination: { page: 1, per_page: 20, total: 1 },
+    });
+    vi.mocked(useAuth.useAuth).mockReturnValue({
+      loading: false,
+      isAuthenticated: true,
+      user: { id: 'u1', name: 'Test User', email: 'test@example.com', avatar_url: null, created_at: '2025-01-01T00:00:00Z' },
+      login: vi.fn(),
+      logout: vi.fn(),
     });
   });
 
@@ -148,5 +158,90 @@ describe('Browse', () => {
       expect(screen.getByRole('dialog', { name: /routes list/i })).toBeTruthy();
     });
     expect(screen.getByText('Urban Walk')).toBeTruthy();
+  });
+
+  describe('welcome modal', () => {
+    it('shows welcome modal on Browse when not authenticated and not dismissed', () => {
+      vi.mocked(useAuth.useAuth).mockReturnValue({
+        loading: false,
+        isAuthenticated: false,
+        user: null,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+      vi.spyOn(WelcomeModalModule, 'getWelcomeDismissed').mockReturnValue(false);
+
+      render(
+        <MemoryRouter>
+          <Browse />
+        </MemoryRouter>,
+      );
+
+      expect(screen.getByRole('dialog', { name: /welcome/i })).toBeTruthy();
+      expect(screen.getByText(/create photowalks, share them with others/i)).toBeTruthy();
+      expect(screen.getByRole('button', { name: /browse the map/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /create account/i })).toBeTruthy();
+    });
+
+    it('does not show welcome modal when dismissed in same session (getWelcomeDismissed true)', () => {
+      vi.mocked(useAuth.useAuth).mockReturnValue({
+        loading: false,
+        isAuthenticated: false,
+        user: null,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+      vi.spyOn(WelcomeModalModule, 'getWelcomeDismissed').mockReturnValue(true);
+
+      render(
+        <MemoryRouter>
+          <Browse />
+        </MemoryRouter>,
+      );
+
+      expect(screen.queryByRole('dialog', { name: /welcome/i })).toBeFalsy();
+    });
+
+    it('Escape closes welcome modal', async () => {
+      vi.mocked(useAuth.useAuth).mockReturnValue({
+        loading: false,
+        isAuthenticated: false,
+        user: null,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+      vi.spyOn(WelcomeModalModule, 'getWelcomeDismissed').mockReturnValue(false);
+
+      render(
+        <MemoryRouter>
+          <Browse />
+        </MemoryRouter>,
+      );
+
+      expect(screen.getByRole('dialog', { name: /welcome/i })).toBeTruthy();
+      await userEvent.keyboard('{Escape}');
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog', { name: /welcome/i })).toBeFalsy();
+      });
+    });
+
+    it('does not show welcome modal when authenticated', () => {
+      vi.mocked(useAuth.useAuth).mockReturnValue({
+        loading: false,
+        isAuthenticated: true,
+        user: { id: 'u1', name: 'User', email: 'u@example.com', avatar_url: null, created_at: '2025-01-01T00:00:00Z' },
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+      vi.spyOn(WelcomeModalModule, 'getWelcomeDismissed').mockReturnValue(false);
+
+      render(
+        <MemoryRouter>
+          <Browse />
+        </MemoryRouter>,
+      );
+
+      expect(screen.queryByRole('dialog', { name: /welcome/i })).toBeFalsy();
+    });
   });
 });
