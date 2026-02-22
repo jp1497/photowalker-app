@@ -14,8 +14,10 @@ import {
 import { MapPanel } from '../components/map/MapPanel';
 import { MapView } from '../components/map/MapView';
 import { RouteList } from '../components/routes/RouteList';
+import { useHighlightedRoute } from '../contexts/HighlightedRouteContext';
 import { useMapContext } from '../contexts/MapContext';
 import {
+  browsePinIconSizeAtZoom,
   createDefaultPinImageData,
   imageToPinImageData,
   MAP_PIN_RASTER_SIZE,
@@ -37,37 +39,6 @@ const BROWSE_PHOTOS_SOURCE_ID = 'browse-photos-source';
 const BROWSE_PHOTOS_LAYER_ID = 'browse-photos-layer';
 /** When true, only show pins for photos that have a valid thumbnail (hide default-pin-only). Toggle for UX filter later. */
 const BROWSE_PHOTOS_HIDE_PINS_WITHOUT_THUMBNAIL = true;
-/**
- * Icon size for browse-photos pins by zoom level.
- *
- * How it works:
- * - BROWSE_PHOTOS_ZOOM_SIZE is a list of [zoom, size] pairs: at that zoom, the pin is drawn at (size × base size).
- * - Base size is 1 (44px native). So size 2 = 88px, 4 = 176px, etc.
- * - iconSizeAtZoom(zoom) does linear interpolation between the pairs: for zoom between z0 and z1,
- *   size = s0 + (s1 - s0) * (zoom - z0) / (z1 - z0).
- *
- * How to adjust:
- * - Bigger steps / more dramatic zoom: use a wider size range (e.g. [8, 0.5] to [18, 3] so zooming in
- *   makes pins grow more noticeably).
- * - Softer curve: add more [zoom, size] pairs so size changes more gradually across zoom.
- * - Stronger “pop” when zoomed in: use larger sizes at high zoom (e.g. [20, 4] or [22, 6]) so pins
- *   stay small until you zoom in, then get clearly bigger.
- */
-const BROWSE_PHOTOS_ZOOM_SIZE: [number, number][] = [
-  [12, 0.5],
-  [16, 2],
-  [24, 15],
-  
-];
-function iconSizeAtZoom(zoom: number): number {
-  if (zoom <= BROWSE_PHOTOS_ZOOM_SIZE[0][0]) return BROWSE_PHOTOS_ZOOM_SIZE[0][1];
-  for (let i = 0; i < BROWSE_PHOTOS_ZOOM_SIZE.length - 1; i++) {
-    const [z0, s0] = BROWSE_PHOTOS_ZOOM_SIZE[i];
-    const [z1, s1] = BROWSE_PHOTOS_ZOOM_SIZE[i + 1];
-    if (zoom <= z1) return s0 + ((s1 - s0) * (zoom - z0)) / (z1 - z0);
-  }
-  return BROWSE_PHOTOS_ZOOM_SIZE[BROWSE_PHOTOS_ZOOM_SIZE.length - 1][1];
-}
 const CLUSTER_STACK_SIZE = 44;
 const CLUSTER_STACK_OFFSET = 5;
 const CLUSTER_STACK_MAX_IMAGES = 5;
@@ -587,7 +558,7 @@ export function Browse() {
         source: BROWSE_PHOTOS_SOURCE_ID,
         layout: {
           'icon-image': ['coalesce', ['get', 'photoId'], 'default-pin'],
-          'icon-size': (PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE) * iconSizeAtZoom(mapApi.getZoom()),
+          'icon-size': (PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE) * browsePinIconSizeAtZoom(mapApi.getZoom()),
           'icon-allow-overlap': true,
           'icon-ignore-placement': true,
         },
@@ -596,7 +567,7 @@ export function Browse() {
         try {
           if (mapApi.getLayer(BROWSE_PHOTOS_LAYER_ID)) {
             const zoom = mapApi.getZoom();
-            mapApi.setLayoutProperty(BROWSE_PHOTOS_LAYER_ID, 'icon-size', (PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE) * iconSizeAtZoom(zoom));
+            mapApi.setLayoutProperty(BROWSE_PHOTOS_LAYER_ID, 'icon-size', (PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE) * browsePinIconSizeAtZoom(zoom));
           }
         } catch {
           /* layer/source may be gone */
@@ -660,6 +631,19 @@ export function Browse() {
     if (!isShellMap || !map?.getSource(BROWSE_PHOTOS_SOURCE_ID)) return;
     addBrowsePhotoImagesToMap(map);
   }, [isShellMap, browsePhotoThumbnailUrls, addBrowsePhotoImagesToMap]);
+
+  const highlightedRoute = useHighlightedRoute();
+  /** When the highlighted layer is ready, fade the browse layer to 50% so the highlighted pins stand out. Fade only when ready to avoid a visible gap. */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!isShellMap || !map?.getLayer(BROWSE_PHOTOS_LAYER_ID)) return;
+    const shouldFade = !!(highlightedRoute?.highlightedRouteSlug && highlightedRoute?.highlightedLayerReady);
+    try {
+      map.setPaintProperty(BROWSE_PHOTOS_LAYER_ID, 'icon-opacity', shouldFade ? 0.2 : 1);
+    } catch {
+      /* ignore */
+    }
+  }, [isShellMap, highlightedRoute?.highlightedRouteSlug, highlightedRoute?.highlightedLayerReady]);
 
   useEffect(() => {
     const map = mapRef.current;

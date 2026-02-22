@@ -26,8 +26,8 @@ export interface ExploreRoutesPanelProps {
   onClose: () => void;
   /** Optional; Phase 4.4 will wire route selection to open drawer. */
   onRouteSelect?: (routeId: string) => void;
-  /** Optional; Phase 4.3 will wire hover/select to highlight route on map. */
-  onHighlightRoute?: (routeId: string | null) => void;
+  /** Optional; Phase 4.3: hover/select passes route slug to show highlighted-route layer on map. */
+  onHighlightRoute?: (slug: string | null) => void;
 }
 
 function boundsToBbox(bounds: { getSouthWest(): { lng: number; lat: number }; getNorthEast(): { lng: number; lat: number } }): string {
@@ -121,10 +121,9 @@ export function ExploreRoutesPanel({
   open,
   onClose,
   onRouteSelect: _onRouteSelect, // Phase 4.4: open route in drawer
-  onHighlightRoute: _onHighlightRoute, // Phase 4.3: highlight route on map
+  onHighlightRoute, // Phase 4.3: highlight route on map
 }: ExploreRoutesPanelProps) {
   void _onRouteSelect;
-  void _onHighlightRoute;
   const navigate = useNavigate();
   const mapContext = useMapContext();
   const { user, isAuthenticated } = useAuth();
@@ -134,9 +133,17 @@ export function ExploreRoutesPanel({
   const [pagination, setPagination] = useState({ page: 1, per_page: PER_PAGE, total: 0 });
   const [loading, setLoading] = useState(false);
   const [bbox, setBbox] = useState<string>(DEFAULT_BBOX);
+  const [hoveredRouteSlug, setHoveredRouteSlug] = useState<string | null>(null);
+  const [selectedRouteSlug, setSelectedRouteSlug] = useState<string | null>(null);
   const bboxRef = useRef(bbox);
   const mapRef = useRef<MapLibreMap | null>(null);
   const moveEndHandlerRef = useRef<(() => void) | null>(null);
+
+  const effectiveHighlightSlug = hoveredRouteSlug ?? selectedRouteSlug;
+
+  useEffect(() => {
+    onHighlightRoute?.(effectiveHighlightSlug);
+  }, [effectiveHighlightSlug, onHighlightRoute]);
 
   useEffect(() => {
     bboxRef.current = bbox;
@@ -203,8 +210,8 @@ export function ExploreRoutesPanel({
   }, [fetchRoutes]);
 
   const handleRouteClick = useCallback((slug: string) => {
-    navigate(`/routes/${slug}`);
-  }, [navigate]);
+    setSelectedRouteSlug((prev) => (prev === slug ? null : slug));
+  }, []);
 
   const handleCreateRoute = useCallback(() => {
     if (isAuthenticated) {
@@ -260,6 +267,9 @@ export function ExploreRoutesPanel({
           loading={loading}
           onPageChange={handlePageChange}
           onRouteClick={handleRouteClick}
+          highlightedRouteSlug={effectiveHighlightSlug}
+          onRouteMouseEnter={(route) => setHoveredRouteSlug(route.slug)}
+          onRouteMouseLeave={() => setHoveredRouteSlug(null)}
         />
       </div>
     </div>

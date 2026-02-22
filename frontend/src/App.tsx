@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
@@ -6,8 +6,10 @@ import { Loading } from './components/common/Loading';
 import { Toast } from './components/common/Toast';
 import { AccountIcon } from './components/common/AccountIcon';
 import { DrawerMenu } from './components/common/DrawerMenu';
+import { HighlightedRouteLayer } from './components/map/HighlightedRouteLayer';
 import { MapShell } from './components/map/MapShell';
 import { ExploreRoutesPanel } from './components/explore/ExploreRoutesPanel';
+import { HighlightedRouteContext } from './contexts/HighlightedRouteContext';
 import { RoutesPanelProvider, useRoutesPanel } from './contexts/RoutesPanelContext';
 import { AuthCallback } from './pages/AuthCallback';
 import { Browse } from './pages/Browse';
@@ -24,6 +26,8 @@ function MapShellLayout() {
   const { slug } = useParams<{ slug: string }>();
   const routesPanel = useRoutesPanel();
   const pathname = location.pathname;
+  const [highlightedRouteSlug, setHighlightedRouteSlug] = useState<string | null>(null);
+  const [highlightedLayerReady, setHighlightedLayerReady] = useState(false);
 
   useEffect(() => {
     const root = document.getElementById('root');
@@ -33,6 +37,13 @@ function MapShellLayout() {
       root.classList.remove('map-first');
     };
   }, []);
+
+  useEffect(() => {
+    if (!routesPanel?.routesPanelOpen) {
+      setHighlightedRouteSlug(null);
+      setHighlightedLayerReady(false);
+    }
+  }, [routesPanel?.routesPanelOpen]);
 
   /** browse-photos = /browse (photo pins in bbox). browse = /routes/me (My Routes). */
   const mode =
@@ -47,12 +58,22 @@ function MapShellLayout() {
             : 'home';
 
   return (
-    <MapShell mode={mode} slug={slug ?? null}>
-      <Outlet />
-      {routesPanel?.routesPanelOpen && (
-        <ExploreRoutesPanel open onClose={() => routesPanel.setRoutesPanelOpen(false)} />
-      )}
-    </MapShell>
+    <HighlightedRouteContext.Provider value={{ highlightedRouteSlug, highlightedLayerReady }}>
+      <MapShell mode={mode} slug={slug ?? null}>
+        <Outlet />
+        <HighlightedRouteLayer
+          highlightedRouteSlug={highlightedRouteSlug}
+          onHighlightedLayerReadyChange={setHighlightedLayerReady}
+        />
+        {routesPanel?.routesPanelOpen && (
+          <ExploreRoutesPanel
+            open
+            onClose={() => routesPanel.setRoutesPanelOpen(false)}
+            onHighlightRoute={setHighlightedRouteSlug}
+          />
+        )}
+      </MapShell>
+    </HighlightedRouteContext.Provider>
   );
 }
 
