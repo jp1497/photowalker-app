@@ -7,7 +7,7 @@ import { Toast } from './components/common/Toast';
 import { AccountIcon } from './components/common/AccountIcon';
 import { DrawerMenu } from './components/common/DrawerMenu';
 import { MapShell } from './components/map/MapShell';
-import { RoutesPanelPlaceholder } from './components/common/RoutesPanelPlaceholder';
+import { ExploreRoutesPanel } from './components/explore/ExploreRoutesPanel';
 import { RoutesPanelProvider, useRoutesPanel } from './contexts/RoutesPanelContext';
 import { AuthCallback } from './pages/AuthCallback';
 import { Browse } from './pages/Browse';
@@ -49,7 +49,7 @@ function MapShellLayout() {
     <MapShell mode={mode} slug={slug ?? null}>
       <Outlet />
       {routesPanel?.routesPanelOpen && (
-        <RoutesPanelPlaceholder onClose={() => routesPanel.setRoutesPanelOpen(false)} />
+        <ExploreRoutesPanel open onClose={() => routesPanel.setRoutesPanelOpen(false)} />
       )}
     </MapShell>
   );
