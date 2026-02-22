@@ -37,6 +37,10 @@ When the user uses intensifiers ("much thinner," "much smaller," "a lot more"), 
 
 When removing a **deprecated integration** (e.g. a dependency or feature that is no longer used), **search the codebase** for all references (imports, env vars, config, README) before removing. Remove the dependency and update the lockfile; leave design or roadmap docs (PRD, implementation roadmap) unchanged unless the user explicitly asks to change product direction. This keeps cleanup complete without over-scoping.
 
+## Feature Removal: Cascade Cleanup
+
+When **removing a feature** (UI, overlay, or integration path), find **all** references before removing: state variables, refs, hooks that consume them (e.g. `useFocusTrap(ref, { active: open })`, `useEffect` that closes on Escape), event handlers that update that state, and imports. Remove or update them in one pass. Leaving one reference (e.g. a ref or a hook still bound to the removed state) causes `ReferenceError` or stray behaviour when the code runs. Grep for the feature’s identifiers (state name, ref name, overlay name) and resolve every hit.
+
 ## Design Doc and Implementation Divergence
 
 When **implementation diverges from a PRD or roadmap** (e.g. a different provider, technology, or approach than specified—such as OpenFreeMap instead of Protomaps), **document the divergence** so the codebase and docs stay aligned. Either (a) add a short note in README or Design/ stating the current implementation (e.g. "The map uses OpenFreeMap; PRD v5 describes the earlier Protomaps plan"), or (b) update the PRD/roadmap to reflect the chosen approach. Leaving design docs to describe a superseded approach without a pointer to reality misleads future readers and agents.
