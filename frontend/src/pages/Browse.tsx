@@ -201,8 +201,11 @@ export function Browse() {
   const [mapBbox, setMapBbox] = useState<string | null>(null);
   /** Photos in viewport for browse-photos mode (GET /v1/photos?bbox=). PRD v6 Step 3.1. */
   const [browsePhotos, setBrowsePhotos] = useState<PhotoBrowseItem[]>([]);
+  const browsePhotosRef = useRef<PhotoBrowseItem[]>([]);
   const [browsePhotoThumbnailUrls, setBrowsePhotoThumbnailUrls] = useState<Record<string, string>>({});
   const browsePhotoThumbnailUrlsRef = useRef<Record<string, string>>({});
+  /** Ref for focus return when closing photo lightbox (Step 3.2). */
+  const mapFocusRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const clusterMarkersRef = useRef<maplibregl.Marker[]>([]);
@@ -478,6 +481,10 @@ export function Browse() {
     });
   }, [browsePhotos]);
 
+  useEffect(() => {
+    browsePhotosRef.current = browsePhotos;
+  }, [browsePhotos]);
+
   const updateClusterMarkers = useCallback((map: MapLibreMap) => {
     clusterMarkersRef.current.forEach((m) => {
       try {
@@ -608,12 +615,22 @@ export function Browse() {
         const feature = e.features?.[0];
         const props = feature?.properties as { photoId?: string; caption?: string; userName?: string } | undefined;
         if (!props?.photoId) return;
-        setSelectedPhotoForLightbox({
-          id: props.photoId,
-          caption: props.caption ?? null,
-          userName: props.userName,
-          routeSlugs: [],
-        });
+        const photo = browsePhotosRef.current.find((p) => p.id === props.photoId);
+        setSelectedPhotoForLightbox(
+          photo
+            ? {
+                id: photo.id,
+                caption: photo.caption ?? null,
+                userName: photo.user.name,
+                routeSlugs: photo.routes ?? [],
+              }
+            : {
+                id: props.photoId,
+                caption: props.caption ?? null,
+                userName: props.userName,
+                routeSlugs: [],
+              }
+        );
       });
     }
     return () => {
@@ -856,6 +873,15 @@ export function Browse() {
           : { padding: '1rem', display: 'flex', flexDirection: 'column' }
       }
     >
+      {isShellMap && (
+        <div
+          ref={mapFocusRef}
+          tabIndex={-1}
+          aria-label="Map"
+          data-testid="map-focus-return"
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none', overflow: 'hidden' }}
+        />
+      )}
       <WelcomeModal open={showWelcomeModal} onDismiss={() => setWelcomeDismissed(true)} />
       {isShellMap && (
         <BottomDrawer
@@ -891,6 +917,7 @@ export function Browse() {
               : undefined,
           }}
           onClose={() => setSelectedPhotoForLightbox(null)}
+          returnFocusRef={mapFocusRef}
         />
       )}
       {isShellMap ? (

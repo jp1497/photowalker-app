@@ -15,7 +15,7 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import BboxTooLargeError, PhotoForbiddenError, PhotoNotFoundError
 from app.db.dependencies import get_db
 from app.models.user import User
-from app.schemas.photo import PhotoBrowseItem, PhotoBrowseUser, PhotoResponse, PhotoUpdate
+from app.schemas.photo import PhotoBrowseItem, PhotoBrowseRouteRef, PhotoBrowseUser, PhotoResponse, PhotoUpdate
 from app.services import photo_service
 from app.storage.s3 import get_file_content, get_presigned_url
 
@@ -87,6 +87,11 @@ async def browse_photos(
     items = []
     for p in photos:
         route_ids = [rp.route_id for rp in p.route_photos]
+        routes = [
+            PhotoBrowseRouteRef(slug=rp.route.slug, title=rp.route.title)
+            for rp in p.route_photos
+            if rp.route
+        ]
         user = p.user
         items.append(
             PhotoBrowseItem(
@@ -94,6 +99,7 @@ async def browse_photos(
                 caption=p.caption,
                 user=PhotoBrowseUser(id=user.id, name=user.name),
                 route_ids=route_ids,
+                routes=routes,
                 image_url=f"/v1/photos/{p.id}/image",
                 location=p.location,
             )

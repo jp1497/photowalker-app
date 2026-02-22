@@ -411,6 +411,10 @@ def test_get_v1_photos_with_bbox_returns_photos_and_pagination() -> None:
         assert photo["user"]["name"] == user.name
         assert "route_ids" in photo
         assert str(route_id) in photo["route_ids"]
+        assert "routes" in photo
+        assert isinstance(photo["routes"], list)
+        assert len(photo["routes"]) >= 1
+        assert photo["routes"][0]["slug"]
         assert photo["image_url"] == f"/v1/photos/{photo['id']}/image"
         assert "location" in photo
         assert photo["location"]["type"] == "Point"

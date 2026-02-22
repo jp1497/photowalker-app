@@ -48,6 +48,13 @@ class PhotoBrowseUser(BaseModel):
     name: str
 
 
+class PhotoBrowseRouteRef(BaseModel):
+    """Route ref for lightbox 'Open route'. PRD v6 - Step 3.2."""
+
+    slug: str
+    title: Optional[str] = None
+
+
 class PhotoBrowseItem(BaseModel):
     """Photo item for GET /v1/photos (photos-in-bbox). Map pins and lightbox. PRD v6 - Step 0.1."""
 
@@ -55,6 +62,7 @@ class PhotoBrowseItem(BaseModel):
     caption: Optional[str] = None
     user: PhotoBrowseUser
     route_ids: list[UUID] = Field(default_factory=list, description="Route IDs that contain this photo")
+    routes: list[PhotoBrowseRouteRef] = Field(default_factory=list, description="Route slug/title for lightbox Open route")
     image_url: str = Field(description="Path to image: GET /v1/photos/{id}/image (supports ?size=thumbnail)")
     location: Optional[dict[str, Any]] = None
 

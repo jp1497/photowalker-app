@@ -181,6 +181,7 @@ describe('Browse', () => {
         getSouthWest: () => ({ lng: -122.5, lat: 37.7 }),
         getNorthEast: () => ({ lng: -122.3, lat: 37.9 }),
       }),
+      getZoom: vi.fn().mockReturnValue(12),
       getSource: vi.fn().mockReturnValue(null),
       getLayer: vi.fn().mockReturnValue(undefined),
       hasImage: vi.fn().mockReturnValue(false),
@@ -240,6 +241,7 @@ describe('Browse', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: /photo lightbox/i })).toBeFalsy();
     });
+    expect(screen.queryByTestId('map-focus-return')).not.toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: /open photo lightbox demo/i }));
     await waitFor(() => {
