@@ -633,7 +633,7 @@ export function Browse() {
   }, [isShellMap, browsePhotoThumbnailUrls, addBrowsePhotoImagesToMap]);
 
   const highlightedRoute = useHighlightedRoute();
-  /** When the highlighted layer is ready, fade the browse layer to 50% so the highlighted pins stand out. Fade only when ready to avoid a visible gap. */
+  /** When the highlighted layer is ready, fade the browse layer so the highlighted pins stand out. Fade only when ready to avoid a visible gap. */
   useEffect(() => {
     const map = mapRef.current;
     if (!isShellMap || !map?.getLayer(BROWSE_PHOTOS_LAYER_ID)) return;

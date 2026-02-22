@@ -29,6 +29,8 @@ export interface BottomDrawerProps {
   peekContent?: React.ReactNode;
   /** Optional ref for the element that opened the drawer; focus returns here on close. */
   returnFocusRef?: React.RefObject<HTMLElement | null>;
+  /** When true and open, the drawer starts expanded instead of peek (e.g. when opening from a route card click). */
+  initialExpanded?: boolean;
 }
 
 const peekBarStyle: React.CSSProperties = {
@@ -106,9 +108,14 @@ export function BottomDrawer({
   title,
   peekContent,
   returnFocusRef,
+  initialExpanded = false,
 }: BottomDrawerProps) {
   const [expanded, setExpanded] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (open && initialExpanded) setExpanded(true);
+  }, [open, initialExpanded]);
 
   useFocusTrap(drawerRef, {
     active: open && expanded,

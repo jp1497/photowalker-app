@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { Loading } from './components/common/Loading';
@@ -26,6 +26,8 @@ function MapShellLayout() {
   const { slug } = useParams<{ slug: string }>();
   const routesPanel = useRoutesPanel();
   const pathname = location.pathname;
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [highlightedRouteSlug, setHighlightedRouteSlug] = useState<string | null>(null);
   const [highlightedLayerReady, setHighlightedLayerReady] = useState(false);
 
@@ -38,12 +40,43 @@ function MapShellLayout() {
     };
   }, []);
 
+  /** Sync highlight from URL when on /browse (e.g. initial load or back/forward). */
+  useEffect(() => {
+    if (pathname !== '/browse') return;
+    setHighlightedRouteSlug(searchParams.get('route') || null);
+  }, [pathname, searchParams]);
+
+  /** Set highlighted route (panel hover/select). Update state immediately so HighlightedRouteLayer and fade respond; keep URL in sync for /browse?route=:slug. */
+  const handleHighlightRoute = useCallback(
+    (slug: string | null) => {
+      setHighlightedRouteSlug(slug);
+      if (pathname === '/browse') {
+        if (slug) {
+          setSearchParams({ route: slug }, { replace: true });
+        } else {
+          setSearchParams({}, { replace: true });
+        }
+      }
+    },
+    [pathname, setSearchParams]
+  );
+
+  /** Open route in drawer: close routes panel, navigate to /routes/:slug. Bottom drawer opens expanded on RouteDetail. */
+  const handleRouteSelect = useCallback(
+    (routeSlug: string) => {
+      routesPanel?.setRoutesPanelOpen(false);
+      navigate(`/routes/${routeSlug}`, { state: { openDrawer: true } });
+    },
+    [navigate, routesPanel]
+  );
+
   useEffect(() => {
     if (!routesPanel?.routesPanelOpen) {
       setHighlightedRouteSlug(null);
       setHighlightedLayerReady(false);
+      if (pathname === '/browse') setSearchParams({}, { replace: true });
     }
-  }, [routesPanel?.routesPanelOpen]);
+  }, [routesPanel?.routesPanelOpen, pathname, setSearchParams]);
 
   /** browse-photos = /browse (photo pins in bbox). browse = /routes/me (My Routes). */
   const mode =
@@ -69,7 +102,8 @@ function MapShellLayout() {
           <ExploreRoutesPanel
             open
             onClose={() => routesPanel.setRoutesPanelOpen(false)}
-            onHighlightRoute={setHighlightedRouteSlug}
+            onHighlightRoute={handleHighlightRoute}
+            onRouteSelect={handleRouteSelect}
           />
         )}
       </MapShell>

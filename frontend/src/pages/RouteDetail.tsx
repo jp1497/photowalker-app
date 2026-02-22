@@ -1,9 +1,10 @@
 /** Route detail page. Map full viewport; metadata and gallery in closable panel. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { updatePhoto } from '../api/photos';
 import { getRouteBySlug } from '../api/routes';
+import { BottomDrawer } from '../components/common/BottomDrawer';
 import { Loading } from '../components/common/Loading';
 import { useMapContext } from '../contexts/MapContext';
 import { MapPanel } from '../components/map/MapPanel';
@@ -17,6 +18,7 @@ import type { RouteDetailResponse } from '../types/route';
 
 export function RouteDetail() {
   const { slug } = useParams<{ slug: string }>();
+  const location = useLocation();
   const { user, isAuthenticated } = useAuth();
   const mapContext = useMapContext();
   const [data, setData] = useState<RouteDetailResponse | null>(null);
@@ -28,7 +30,10 @@ export function RouteDetail() {
   const [editLocationCoords, setEditLocationCoords] = useState<[number, number] | null>(null);
   const [savingLocation, setSavingLocation] = useState(false);
   const [editLocationError, setEditLocationError] = useState<string | null>(null);
-  const [detailsPanelOpen, setDetailsPanelOpen] = useState(true);
+  const [detailsPanelOpen, setDetailsPanelOpen] = useState(() => {
+    const s = location.state as { openDrawer?: boolean } | undefined;
+    return s?.openDrawer !== false;
+  });
   const { center: mapCenter } = usePreferredMapCenter();
   const isShellMap = !!mapContext;
   const detailsPanelRef = useRef<HTMLDivElement>(null);
@@ -388,33 +393,17 @@ export function RouteDetail() {
           {route.title}
         </button>
       )}
-      {detailsPanelOpen && (
-        <div
-          ref={detailsPanelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Route details"
-          style={{
-            position: 'absolute',
-            top: '3.5rem',
-            left: '0.75rem',
-            width: 'min(420px, calc(100vw - 1.5rem))',
-            maxHeight: 'calc(100vh - 5rem)',
-            overflow: 'auto',
-            background: 'rgba(255,255,255,0.98)',
-            padding: '1rem',
-            borderRadius: 8,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            zIndex: 500,
-            pointerEvents: 'auto',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-            <p style={{ margin: 0, fontSize: '0.875rem' }}>
-              <Link to="/">Home</Link> / <Link to="/browse">Browse</Link>
-            </p>
-            <button type="button" onClick={() => setDetailsPanelOpen(false)} aria-label="Close details">×</button>
-          </div>
+      <BottomDrawer
+        open={detailsPanelOpen}
+        onClose={() => setDetailsPanelOpen(false)}
+        title={route.title}
+        returnFocusRef={floatingButtonRef}
+        initialExpanded={!!(location.state as { openDrawer?: boolean })?.openDrawer}
+      >
+        <div ref={detailsPanelRef} style={{ padding: '0 1rem 1rem' }}>
+          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.875rem' }}>
+            <Link to="/">Home</Link> / <Link to="/browse">Browse</Link>
+          </p>
           <RouteView route={route} photos={photos} selectedPhotoId={selectedPhotoId} onSelectPhoto={setSelectedPhotoId} />
           <section style={{ marginTop: '1.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
@@ -450,7 +439,7 @@ export function RouteDetail() {
             />
           </section>
         </div>
-      )}
+      </BottomDrawer>
       {editingPhotoId && (
         <div
           ref={editLocationModalRef}

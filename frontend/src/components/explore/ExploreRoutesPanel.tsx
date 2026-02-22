@@ -24,8 +24,8 @@ export interface ExploreRoutesPanelProps {
   open: boolean;
   /** Called when the panel should close (e.g. close button). */
   onClose: () => void;
-  /** Optional; Phase 4.4 will wire route selection to open drawer. */
-  onRouteSelect?: (routeId: string) => void;
+  /** When provided, route card click opens the route (navigate to /routes/:slug and open drawer). */
+  onRouteSelect?: (slug: string) => void;
   /** Optional; Phase 4.3: hover/select passes route slug to show highlighted-route layer on map. */
   onHighlightRoute?: (slug: string | null) => void;
 }
@@ -120,10 +120,9 @@ const createButtonStyle: React.CSSProperties = {
 export function ExploreRoutesPanel({
   open,
   onClose,
-  onRouteSelect: _onRouteSelect, // Phase 4.4: open route in drawer
-  onHighlightRoute, // Phase 4.3: highlight route on map
+  onRouteSelect,
+  onHighlightRoute,
 }: ExploreRoutesPanelProps) {
-  void _onRouteSelect;
   const navigate = useNavigate();
   const mapContext = useMapContext();
   const { user, isAuthenticated } = useAuth();
@@ -209,9 +208,16 @@ export function ExploreRoutesPanel({
     fetchRoutes(page);
   }, [fetchRoutes]);
 
-  const handleRouteClick = useCallback((slug: string) => {
-    setSelectedRouteSlug((prev) => (prev === slug ? null : slug));
-  }, []);
+  const handleRouteClick = useCallback(
+    (slug: string) => {
+      if (onRouteSelect) {
+        onRouteSelect(slug);
+      } else {
+        setSelectedRouteSlug((prev) => (prev === slug ? null : slug));
+      }
+    },
+    [onRouteSelect]
+  );
 
   const handleCreateRoute = useCallback(() => {
     if (isAuthenticated) {
