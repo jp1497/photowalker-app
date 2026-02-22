@@ -5,8 +5,10 @@ import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { Loading } from './components/common/Loading';
 import { Toast } from './components/common/Toast';
 import { AccountIcon } from './components/common/AccountIcon';
-import { AppMenu } from './components/common/AppMenu';
+import { DrawerMenu } from './components/common/DrawerMenu';
 import { MapShell } from './components/map/MapShell';
+import { RoutesPanelPlaceholder } from './components/common/RoutesPanelPlaceholder';
+import { RoutesPanelProvider, useRoutesPanel } from './contexts/RoutesPanelContext';
 import { AuthCallback } from './pages/AuthCallback';
 import { Browse } from './pages/Browse';
 import { CreateRouteFromPhotos } from './pages/CreateRouteFromPhotos';
@@ -20,6 +22,7 @@ import './App.css';
 function MapShellLayout() {
   const location = useLocation();
   const { slug } = useParams<{ slug: string }>();
+  const routesPanel = useRoutesPanel();
   const pathname = location.pathname;
 
   useEffect(() => {
@@ -45,6 +48,9 @@ function MapShellLayout() {
   return (
     <MapShell mode={mode} slug={slug ?? null}>
       <Outlet />
+      {routesPanel?.routesPanelOpen && (
+        <RoutesPanelPlaceholder onClose={() => routesPanel.setRoutesPanelOpen(false)} />
+      )}
     </MapShell>
   );
 }
@@ -63,9 +69,10 @@ function App() {
 
   return (
     <BrowserRouter>
-      <AppMenu />
-      <AccountIcon />
-      <Routes>
+      <RoutesPanelProvider>
+        <DrawerMenu />
+        <AccountIcon />
+        <Routes>
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route element={<MapShellLayout />}>
           <Route path="/" element={<Navigate to="/browse" replace />} />
@@ -91,8 +98,9 @@ function App() {
           <Route path="/routes/:slug" element={<RouteDetail />} />
         </Route>
         <Route path="*" element={<NotFound />} />
-      </Routes>
-      <Toast />
+        </Routes>
+        <Toast />
+      </RoutesPanelProvider>
     </BrowserRouter>
   );
 }
