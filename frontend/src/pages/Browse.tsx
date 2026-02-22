@@ -18,6 +18,7 @@ import {
   createDefaultPinImageData,
   imageToPinImageData,
 } from '../components/map/pinImageUtils';
+import { BottomDrawer } from '../components/common/BottomDrawer';
 import { getWelcomeDismissed, WelcomeModal } from '../components/common/WelcomeModal';
 import { useAuth } from '../hooks/useAuth';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -152,6 +153,8 @@ export function Browse() {
   const listPage = useRef(1);
   const [filtersOverlayOpen, setFiltersOverlayOpen] = useState(false);
   const [listOverlayOpen, setListOverlayOpen] = useState(true);
+  /** Temporary: open BottomDrawer for Step 2.1 verification; remove when route view/create use it. */
+  const [demoDrawerOpen, setDemoDrawerOpen] = useState(false);
   const filtersButtonRef = useRef<HTMLButtonElement>(null);
   const routesButtonRef = useRef<HTMLButtonElement>(null);
   const filtersOverlayRef = useRef<HTMLDivElement>(null);
@@ -544,6 +547,7 @@ export function Browse() {
       if (e.key === 'Escape') {
         setFiltersOverlayOpen(false);
         setListOverlayOpen(false);
+        setDemoDrawerOpen(false);
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -586,9 +590,35 @@ export function Browse() {
       }
     >
       <WelcomeModal open={showWelcomeModal} onDismiss={() => setWelcomeDismissed(true)} />
+      {isShellMap && (
+        <BottomDrawer
+          open={demoDrawerOpen}
+          onClose={() => setDemoDrawerOpen(false)}
+          title="Drawer demo"
+          peekContent="Step 2.1 verification — peek strip"
+        >
+          <div style={{ padding: '1rem' }}>
+            <p style={{ marginBottom: '1rem' }}>
+              This is the expanded scrollable body. The shared BottomDrawer will later show route view or create-route content here.
+            </p>
+            <p style={{ marginBottom: '1rem' }}>Use the ▲ button or click the peek bar to expand; ▼ to collapse; × or Escape to close.</p>
+            {Array.from({ length: 12 }, (_, i) => (
+              <p key={i} style={{ marginBottom: '0.5rem' }}>Line {i + 1} — scroll to confirm the body scrolls.</p>
+            ))}
+          </div>
+        </BottomDrawer>
+      )}
       {isShellMap ? (
         <>
-          <div style={{ position: 'absolute', top: '1rem', right: '5rem', pointerEvents: 'auto', zIndex: 500 }}>
+          <div style={{ position: 'absolute', top: '1rem', right: '5rem', display: 'flex', gap: '0.5rem', pointerEvents: 'auto', zIndex: 500 }}>
+            <button
+              type="button"
+              onClick={() => setDemoDrawerOpen(true)}
+              style={{ ...floatingButtonStyle, flexShrink: 0 }}
+              aria-label="Open drawer demo"
+            >
+              Drawer
+            </button>
             <button
               ref={filtersButtonRef}
               type="button"
