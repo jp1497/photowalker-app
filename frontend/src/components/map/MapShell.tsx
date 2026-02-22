@@ -5,7 +5,7 @@ import { MapView } from './MapView';
 import { MapContextProvider } from '../../contexts/MapContext';
 import { usePreferredMapCenter } from '../../hooks/usePreferredMapCenter';
 
-export type MapShellMode = 'browse' | 'detail' | 'create' | 'home';
+export type MapShellMode = 'browse' | 'browse-photos' | 'detail' | 'create' | 'home';
 
 export interface MapShellProps {
   /** Current mode for future layer switching. */

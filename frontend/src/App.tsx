@@ -34,9 +34,10 @@ function MapShellLayout() {
     };
   }, []);
 
+  /** browse-photos = /browse (photo pins in bbox). browse = /routes/me (My Routes). */
   const mode =
     pathname === '/browse'
-      ? 'browse'
+      ? 'browse-photos'
       : pathname === '/routes/create'
         ? 'create'
         : pathname === '/routes/me'

@@ -6,10 +6,12 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Route as RouteType } from '../types/route';
 import { Browse } from './Browse';
 import * as routesApi from '../api/routes';
+import * as photosApi from '../api/photos';
 import * as useAuth from '../hooks/useAuth';
 import * as WelcomeModalModule from '../components/common/WelcomeModal';
 
 vi.mock('../api/routes');
+vi.mock('../api/photos');
 vi.mock('../hooks/useAuth');
 vi.mock('../components/photos/PhotoImage', () => ({
   PhotoImage: () => <div data-testid="photo-image" />,
@@ -84,6 +86,11 @@ describe('Browse', () => {
       routes: mockRoutes,
       pagination: { page: 1, per_page: 20, total: 1 },
     });
+    vi.mocked(photosApi.getPhotosInBbox).mockReset();
+    vi.mocked(photosApi.getPhotosInBbox).mockResolvedValue({
+      photos: [],
+      pagination: { page: 1, per_page: 50, total: 0 },
+    });
     vi.mocked(useAuth.useAuth).mockReturnValue({
       loading: false,
       isAuthenticated: true,
@@ -141,14 +148,9 @@ describe('Browse', () => {
     expect(screen.getByRole('button', { name: /next/i })).toBeTruthy();
   });
 
-  it('shell mode: Filters and List open overlays; list overlay shows RouteList', async () => {
+  it('shell mode: Filters overlay exists; no Routes button or list overlay (PRD v6 Step 3.1)', async () => {
     const { useMapContext } = await import('../contexts/MapContext');
     vi.mocked(useMapContext).mockReturnValue({ map: null, onMapReady: vi.fn() });
-
-    vi.mocked(routesApi.getBrowseRoutes).mockResolvedValue({
-      routes: mockRoutes,
-      pagination: { page: 1, per_page: 20, total: 1 },
-    });
 
     render(
       <MemoryRouter>
@@ -157,10 +159,57 @@ describe('Browse', () => {
     );
 
     expect(screen.getByRole('button', { name: /open filters/i })).toBeTruthy();
-    await waitFor(() => {
-      expect(screen.getByRole('dialog', { name: /routes list/i })).toBeTruthy();
-    });
-    expect(screen.getByText('Urban Walk')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /open routes/i })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: /routes list/i })).toBeNull();
+  });
+
+  it('shell mode: fetches photos in bbox when map is ready (browse-photos mode)', async () => {
+    const onMapReadyStub = vi.fn();
+    const { useMapContext } = await import('../contexts/MapContext');
+    vi.mocked(useMapContext).mockReturnValue({ map: null, onMapReady: onMapReadyStub });
+
+    render(
+      <MemoryRouter>
+        <Browse />
+      </MemoryRouter>,
+    );
+
+    expect(onMapReadyStub).toHaveBeenCalled();
+    const registerCb = onMapReadyStub.mock.calls[0][0];
+    const fakeMap = {
+      getBounds: () => ({
+        getSouthWest: () => ({ lng: -122.5, lat: 37.7 }),
+        getNorthEast: () => ({ lng: -122.3, lat: 37.9 }),
+      }),
+      getSource: vi.fn().mockReturnValue(null),
+      getLayer: vi.fn().mockReturnValue(undefined),
+      hasImage: vi.fn().mockReturnValue(false),
+      addSource: vi.fn(),
+      addLayer: vi.fn(),
+      addImage: vi.fn(),
+      removeSource: vi.fn(),
+      removeLayer: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+      once: vi.fn((_ev: string, cb: () => void) => {
+        setTimeout(cb, 0);
+      }),
+      queryRenderedFeatures: vi.fn().mockReturnValue([]),
+      getStyle: vi.fn().mockReturnValue({}),
+      easeTo: vi.fn(),
+    };
+    registerCb(fakeMap);
+
+    await waitFor(
+      () => {
+        expect(photosApi.getPhotosInBbox).toHaveBeenCalledWith(
+          '-122.5,37.7,-122.3,37.9',
+          1,
+          50
+        );
+      },
+      { timeout: 1000 },
+    );
   });
 
   it('photo lightbox: Photo button opens lightbox; Close and Escape close it; Open route navigates', async () => {

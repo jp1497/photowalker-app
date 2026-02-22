@@ -4,7 +4,7 @@ import { authStore } from '../store/authStore';
 import { updateMe } from '../api/auth';
 
 const FALLBACK_CENTER: [number, number] = [-122.42, 37.78];
-const DEFAULT_ZOOM = 12;
+const DEFAULT_ZOOM = 14;
 
 export interface UsePreferredMapCenterResult {
   center: [number, number];
