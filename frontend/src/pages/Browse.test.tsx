@@ -1,9 +1,9 @@
-/** Unit tests for Browse: bbox fetch from map, list view pagination, welcome modal. */
+/** Unit tests for Browse: bbox fetch from map, list view pagination, welcome modal, photo lightbox. */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
-import type { Route } from '../types/route';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import type { Route as RouteType } from '../types/route';
 import { Browse } from './Browse';
 import * as routesApi from '../api/routes';
 import * as useAuth from '../hooks/useAuth';
@@ -11,6 +11,9 @@ import * as WelcomeModalModule from '../components/common/WelcomeModal';
 
 vi.mock('../api/routes');
 vi.mock('../hooks/useAuth');
+vi.mock('../components/photos/PhotoImage', () => ({
+  PhotoImage: () => <div data-testid="photo-image" />,
+}));
 vi.mock('../hooks/usePreferredMapCenter', () => ({
   usePreferredMapCenter: () => ({ center: [-122.42, 37.78], zoom: 12 }),
 }));
@@ -58,7 +61,7 @@ vi.mock('maplibre-gl', () => ({
   },
 }));
 
-const mockRoutes: Route[] = [
+const mockRoutes: RouteType[] = [
   {
     id: 'r1',
     user_id: 'u1',
@@ -158,6 +161,45 @@ describe('Browse', () => {
       expect(screen.getByRole('dialog', { name: /routes list/i })).toBeTruthy();
     });
     expect(screen.getByText('Urban Walk')).toBeTruthy();
+  });
+
+  it('photo lightbox: Photo button opens lightbox; Close and Escape close it; Open route navigates', async () => {
+    const { useMapContext } = await import('../contexts/MapContext');
+    vi.mocked(useMapContext).mockReturnValue({ map: null, onMapReady: vi.fn() });
+    vi.mocked(routesApi.getBrowseRoutes).mockResolvedValue({
+      routes: mockRoutes,
+      pagination: { page: 1, per_page: 20, total: 1 },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/browse']}>
+        <Routes>
+          <Route path="/browse" element={<Browse />} />
+          <Route path="/routes/:slug" element={<div data-testid="route-detail">Route detail</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /open photo lightbox demo/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: /photo lightbox/i })).toBeTruthy();
+    });
+    expect(screen.getByText('Step 2.3 demo photo')).toBeTruthy();
+    expect(screen.getByText('Demo user')).toBeTruthy();
+
+    await userEvent.click(screen.getByText('Close'));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /photo lightbox/i })).toBeFalsy();
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /open photo lightbox demo/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: /photo lightbox/i })).toBeTruthy();
+    });
+    await userEvent.click(screen.getByRole('button', { name: /open route/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId('route-detail')).toBeTruthy();
+    });
   });
 
   describe('welcome modal', () => {

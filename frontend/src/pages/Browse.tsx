@@ -20,6 +20,7 @@ import {
 } from '../components/map/pinImageUtils';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { getWelcomeDismissed, WelcomeModal } from '../components/common/WelcomeModal';
+import { PhotoGallery } from '../components/photos/PhotoGallery';
 import { useAuth } from '../hooks/useAuth';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { usePreferredMapCenter } from '../hooks/usePreferredMapCenter';
@@ -155,6 +156,13 @@ export function Browse() {
   const [listOverlayOpen, setListOverlayOpen] = useState(true);
   /** Temporary: open BottomDrawer for Step 2.1 verification; remove when route view/create use it. */
   const [demoDrawerOpen, setDemoDrawerOpen] = useState(false);
+  /** Photo selected for lightbox (e.g. from pin click in Phase 3). Step 2.3: reuse PhotoGallery for single-photo view. */
+  const [selectedPhotoForLightbox, setSelectedPhotoForLightbox] = useState<{
+    id: string;
+    caption: string | null;
+    userName?: string;
+    routeSlugs?: { slug: string; title?: string }[];
+  } | null>(null);
   const filtersButtonRef = useRef<HTMLButtonElement>(null);
   const routesButtonRef = useRef<HTMLButtonElement>(null);
   const filtersOverlayRef = useRef<HTMLDivElement>(null);
@@ -608,25 +616,60 @@ export function Browse() {
           </div>
         </BottomDrawer>
       )}
+      {isShellMap && selectedPhotoForLightbox && (
+        <PhotoGallery
+          photos={[{ id: selectedPhotoForLightbox.id, caption: selectedPhotoForLightbox.caption }]}
+          selectedPhotoId={selectedPhotoForLightbox.id}
+          showGrid={false}
+          lightboxContext={{
+            user: selectedPhotoForLightbox.userName ? { id: '', name: selectedPhotoForLightbox.userName } : undefined,
+            routes: selectedPhotoForLightbox.routeSlugs,
+            onOpenRoute: selectedPhotoForLightbox.routeSlugs?.length
+              ? (slug) => {
+                  setSelectedPhotoForLightbox(null);
+                  navigate(`/routes/${slug}`);
+                }
+              : undefined,
+          }}
+          onClose={() => setSelectedPhotoForLightbox(null)}
+        />
+      )}
       {isShellMap ? (
         <>
-          <div style={{ position: 'absolute', top: '1rem', right: '5rem', display: 'flex', gap: '0.5rem', pointerEvents: 'auto', zIndex: 500 }}>
+          <div style={{ position: 'absolute', top: '3.5rem', right: '5rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem', pointerEvents: 'auto', zIndex: 500 }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setDemoDrawerOpen(true)}
+                style={{ ...floatingButtonStyle, flexShrink: 0 }}
+                aria-label="Open drawer demo"
+              >
+                Drawer
+              </button>
+              <button
+                ref={filtersButtonRef}
+                type="button"
+                onClick={() => setFiltersOverlayOpen(true)}
+                style={{ ...floatingButtonStyle, flexShrink: 0 }}
+                aria-label="Open filters"
+              >
+                Filters
+              </button>
+            </div>
             <button
               type="button"
-              onClick={() => setDemoDrawerOpen(true)}
+              onClick={() =>
+                setSelectedPhotoForLightbox({
+                  id: 'demo-photo',
+                  caption: 'Step 2.3 demo photo',
+                  userName: 'Demo user',
+                  routeSlugs: [{ slug: 'demo-route', title: 'Demo route' }],
+                })
+              }
               style={{ ...floatingButtonStyle, flexShrink: 0 }}
-              aria-label="Open drawer demo"
+              aria-label="Open photo lightbox demo"
             >
-              Drawer
-            </button>
-            <button
-              ref={filtersButtonRef}
-              type="button"
-              onClick={() => setFiltersOverlayOpen(true)}
-              style={{ ...floatingButtonStyle, flexShrink: 0 }}
-              aria-label="Open filters"
-            >
-              Filters
+              Photo
             </button>
           </div>
           <div style={{ position: 'absolute', top: '3.5rem', left: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem', pointerEvents: 'auto', zIndex: 500 }}>
