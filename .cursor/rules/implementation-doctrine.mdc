@@ -20,6 +20,14 @@ When configuring healthchecks, OpenAPI, or integration points, **verify paths an
 
 Use the roadmap step's **Definition of Done** as the authoritative completion checklist. Do not add scope beyond it. Each checkbox in the DoD is a deliverable; when all are satisfied, the step is complete. Avoid over-engineering or "helpful" extras that are outside the step.
 
+## User-Stated Design Overrides Spec
+
+When the user **explicitly** states a design preference, mental model, or future intent that differs from the roadmap or PRD (e.g. "remove the menu button," "panel beside the nav," "translates to bottom nav on mobile"), treat the user's statement as the current authority and implement accordingly. Do not refuse on the grounds that the written spec says something different. Document divergence if needed per Design Doc and Implementation Divergence.
+
+## User Intensifiers and Defaults
+
+When the user uses intensifiers ("much thinner," "much smaller," "a lot more"), choose a value that **clearly satisfies the stronger end** of the range rather than a moderate compromise, to avoid repeated iteration.
+
 ## Deprecated Integration Cleanup
 
 When removing a **deprecated integration** (e.g. a dependency or feature that is no longer used), **search the codebase** for all references (imports, env vars, config, README) before removing. Remove the dependency and update the lockfile; leave design or roadmap docs (PRD, implementation roadmap) unchanged unless the user explicitly asks to change product direction. This keeps cleanup complete without over-scoping.

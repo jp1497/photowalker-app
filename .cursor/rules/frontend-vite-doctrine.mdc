@@ -49,6 +49,14 @@ alwaysApply: false
 
 - When the user requests a change to "the floating button" or "the X" in a context where similar elements exist across multiple pages (e.g. Browse, My Routes, Create Route, Route Detail), **assume the scope is the current context** unless the user explicitly says "all" or "app-wide." Do not change every similar element across the app without clear scope; over-application leads to reverts.
 
+## Layout: Shared Dimensions for Aligned Chrome
+
+- When two or more UI pieces must stay **spatially aligned** (e.g. a nav rail and a panel that opens beside it), define the driving dimension (e.g. nav width) in **one canonical place** and export it for consumers (e.g. panel `left` offset). This keeps the chrome coherent and avoids drift when one value is changed later.
+
+## Layout: Persistent Chrome and Sibling Panels
+
+- When a chrome element (nav, sidebar) is **always visible** rather than toggle-open, position any dependent panels or overlays so they appear **adjacent** to that chrome (e.g. panel `left` = nav width), so the whole reads as one coherent unit. Do not leave panels as full-viewport overlays once the chrome is persistent.
+
 ## Expected UI or Changes Not Visible
 
 - When the user reports that new or changed UI is not visible (e.g. "I don't see the button" or "nothing was added") **and the code is present in the repo**, consider **environment and runtime** before changing layout or visibility.
