@@ -148,7 +148,7 @@ describe('Browse', () => {
     expect(screen.getByRole('button', { name: /next/i })).toBeTruthy();
   });
 
-  it('shell mode: Filters overlay exists; no Routes button or list overlay (PRD v6 Step 3.1)', async () => {
+  it('shell mode: no route list or filters UI (PRD v6 Step 3.3)', async () => {
     const { useMapContext } = await import('../contexts/MapContext');
     vi.mocked(useMapContext).mockReturnValue({ map: null, onMapReady: vi.fn() });
 
@@ -158,7 +158,7 @@ describe('Browse', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('button', { name: /open filters/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /open filters/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /open routes/i })).toBeNull();
     expect(screen.queryByRole('dialog', { name: /routes list/i })).toBeNull();
   });
@@ -213,13 +213,55 @@ describe('Browse', () => {
     );
   });
 
-  it('photo lightbox: Photo button opens lightbox; Close and Escape close it; Open route navigates', async () => {
+  it('photo lightbox: pin click opens lightbox; Close returns focus; Open route navigates', async () => {
+    const onMapReadyStub = vi.fn();
     const { useMapContext } = await import('../contexts/MapContext');
-    vi.mocked(useMapContext).mockReturnValue({ map: null, onMapReady: vi.fn() });
+    vi.mocked(useMapContext).mockReturnValue({ map: null, onMapReady: onMapReadyStub });
     vi.mocked(routesApi.getBrowseRoutes).mockResolvedValue({
       routes: mockRoutes,
       pagination: { page: 1, per_page: 20, total: 1 },
     });
+    const browsePhoto = {
+      id: 'p1',
+      caption: 'Pin photo',
+      user: { id: 'u1', name: 'Pin user' },
+      route_ids: ['r1'],
+      routes: [{ slug: 'demo-route', title: 'Demo route' }],
+      image_url: '/v1/photos/p1/image',
+      location: { type: 'Point' as const, coordinates: [-122.4, 37.8] as [number, number] },
+    };
+    vi.mocked(photosApi.getPhotosInBbox).mockResolvedValue({
+      photos: [browsePhoto],
+      pagination: { page: 1, per_page: 50, total: 1 },
+    });
+    vi.mocked(photosApi.fetchPhotoImageBlob).mockResolvedValue(new Blob());
+
+    let pinClickHandler: ((e: { features?: Array<{ properties?: { photoId?: string } }> }) => void) | null = null;
+    const fakeMap = {
+      getBounds: () => ({
+        getSouthWest: () => ({ lng: -122.5, lat: 37.7 }),
+        getNorthEast: () => ({ lng: -122.3, lat: 37.9 }),
+      }),
+      getZoom: vi.fn().mockReturnValue(12),
+      getSource: vi.fn().mockReturnValue(null),
+      getLayer: vi.fn().mockReturnValue(undefined),
+      hasImage: vi.fn().mockReturnValue(false),
+      addSource: vi.fn(),
+      addLayer: vi.fn(),
+      addImage: vi.fn(),
+      removeSource: vi.fn(),
+      removeLayer: vi.fn(),
+      on: vi.fn((ev: string, layerId: string, cb: (e: unknown) => void) => {
+        if (ev === 'click' && layerId === 'browse-photos-layer') pinClickHandler = cb as typeof pinClickHandler;
+      }),
+      off: vi.fn(),
+      once: vi.fn((_ev: string, cb: () => void) => {
+        setTimeout(cb, 0);
+      }),
+      queryRenderedFeatures: vi.fn().mockReturnValue([]),
+      getStyle: vi.fn().mockReturnValue({}),
+      easeTo: vi.fn(),
+    };
 
     render(
       <MemoryRouter initialEntries={['/browse']}>
@@ -230,12 +272,21 @@ describe('Browse', () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /open photo lightbox demo/i }));
+    const registerCb = onMapReadyStub.mock.calls[0][0];
+    registerCb(fakeMap);
+    await waitFor(() => {
+      expect(photosApi.getPhotosInBbox).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(pinClickHandler).not.toBeNull();
+    });
+
+    pinClickHandler!({ features: [{ properties: { photoId: 'p1', caption: 'Pin photo', userName: 'Pin user' } }] });
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: /photo lightbox/i })).toBeTruthy();
     });
-    expect(screen.getByText('Step 2.3 demo photo')).toBeTruthy();
-    expect(screen.getByText('Demo user')).toBeTruthy();
+    expect(screen.getByText('Pin photo')).toBeTruthy();
+    expect(screen.getByText('Pin user')).toBeTruthy();
 
     await userEvent.click(screen.getByText('Close'));
     await waitFor(() => {
@@ -243,7 +294,7 @@ describe('Browse', () => {
     });
     expect(screen.queryByTestId('map-focus-return')).not.toBeNull();
 
-    await userEvent.click(screen.getByRole('button', { name: /open photo lightbox demo/i }));
+    pinClickHandler!({ features: [{ properties: { photoId: 'p1' } }] });
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: /photo lightbox/i })).toBeTruthy();
     });

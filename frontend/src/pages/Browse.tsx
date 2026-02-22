@@ -21,7 +21,6 @@ import {
   MAP_PIN_RASTER_SIZE,
   PIN_ICON_SIZE,
 } from '../components/map/pinImageUtils';
-import { BottomDrawer } from '../components/common/BottomDrawer';
 import { getWelcomeDismissed, WelcomeModal } from '../components/common/WelcomeModal';
 import { PhotoGallery } from '../components/photos/PhotoGallery';
 import { useAuth } from '../hooks/useAuth';
@@ -213,10 +212,7 @@ export function Browse() {
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const thumbnailUrlsRef = useRef<Record<string, string>>({});
   const listPage = useRef(1);
-  const [filtersOverlayOpen, setFiltersOverlayOpen] = useState(false);
   const [listOverlayOpen, setListOverlayOpen] = useState(true);
-  /** Temporary: open BottomDrawer for Step 2.1 verification; remove when route view/create use it. */
-  const [demoDrawerOpen, setDemoDrawerOpen] = useState(false);
   /** Photo selected for lightbox (e.g. from pin click in Phase 3). Step 2.3: reuse PhotoGallery for single-photo view. */
   const [selectedPhotoForLightbox, setSelectedPhotoForLightbox] = useState<{
     id: string;
@@ -224,12 +220,9 @@ export function Browse() {
     userName?: string;
     routeSlugs?: { slug: string; title?: string }[];
   } | null>(null);
-  const filtersButtonRef = useRef<HTMLButtonElement>(null);
   const routesButtonRef = useRef<HTMLButtonElement>(null);
-  const filtersOverlayRef = useRef<HTMLDivElement>(null);
   const listOverlayRef = useRef<HTMLDivElement>(null);
 
-  useFocusTrap(filtersOverlayRef, { active: filtersOverlayOpen, returnFocusRef: filtersButtonRef });
   useFocusTrap(listOverlayRef, { active: listOverlayOpen, returnFocusRef: routesButtonRef });
 
   const routesWithPhoto = useMemo(
@@ -831,11 +824,7 @@ export function Browse() {
   useEffect(() => {
     if (!isShellMap) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setFiltersOverlayOpen(false);
-        setListOverlayOpen(false);
-        setDemoDrawerOpen(false);
-      }
+      if (e.key === 'Escape') setListOverlayOpen(false);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
@@ -849,19 +838,6 @@ export function Browse() {
     setListOverlayOpen(false);
     navigate(`/routes/${slug}`);
   }, [navigate]);
-
-  const floatingButtonStyle = {
-    position: 'absolute' as const,
-    zIndex: 100,
-    padding: '0.5rem 0.75rem',
-    fontSize: '0.875rem',
-    border: '1px solid #d1d5db',
-    borderRadius: 6,
-    background: 'rgba(255,255,255,0.95)',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    cursor: 'pointer' as const,
-    pointerEvents: 'auto' as const,
-  };
 
   const showWelcomeModal = !isAuthenticated && !welcomeDismissed;
 
@@ -883,24 +859,6 @@ export function Browse() {
         />
       )}
       <WelcomeModal open={showWelcomeModal} onDismiss={() => setWelcomeDismissed(true)} />
-      {isShellMap && (
-        <BottomDrawer
-          open={demoDrawerOpen}
-          onClose={() => setDemoDrawerOpen(false)}
-          title="Drawer demo"
-          peekContent="Step 2.1 verification — peek strip"
-        >
-          <div style={{ padding: '1rem' }}>
-            <p style={{ marginBottom: '1rem' }}>
-              This is the expanded scrollable body. The shared BottomDrawer will later show route view or create-route content here.
-            </p>
-            <p style={{ marginBottom: '1rem' }}>Use the ▲ button or click the peek bar to expand; ▼ to collapse; × or Escape to close.</p>
-            {Array.from({ length: 12 }, (_, i) => (
-              <p key={i} style={{ marginBottom: '0.5rem' }}>Line {i + 1} — scroll to confirm the body scrolls.</p>
-            ))}
-          </div>
-        </BottomDrawer>
-      )}
       {isShellMap && selectedPhotoForLightbox && (
         <PhotoGallery
           photos={[{ id: selectedPhotoForLightbox.id, caption: selectedPhotoForLightbox.caption }]}
@@ -922,97 +880,6 @@ export function Browse() {
       )}
       {isShellMap ? (
         <>
-          <div style={{ position: 'absolute', top: '3.5rem', right: '5rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem', pointerEvents: 'auto', zIndex: 500 }}>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                type="button"
-                onClick={() => setDemoDrawerOpen(true)}
-                style={{ ...floatingButtonStyle, flexShrink: 0 }}
-                aria-label="Open drawer demo"
-              >
-                Drawer
-              </button>
-              <button
-                ref={filtersButtonRef}
-                type="button"
-                onClick={() => setFiltersOverlayOpen(true)}
-                style={{ ...floatingButtonStyle, flexShrink: 0 }}
-                aria-label="Open filters"
-              >
-                Filters
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                setSelectedPhotoForLightbox({
-                  id: 'demo-photo',
-                  caption: 'Step 2.3 demo photo',
-                  userName: 'Demo user',
-                  routeSlugs: [{ slug: 'demo-route', title: 'Demo route' }],
-                })
-              }
-              style={{ ...floatingButtonStyle, flexShrink: 0 }}
-              aria-label="Open photo lightbox demo"
-            >
-              Photo
-            </button>
-          </div>
-          {filtersOverlayOpen && (
-            <>
-              <div
-                role="presentation"
-                aria-hidden="true"
-                style={{ position: 'absolute', inset: 0, zIndex: 301, background: 'rgba(0,0,0,0.3)', pointerEvents: 'auto' }}
-                onClick={() => setFiltersOverlayOpen(false)}
-              />
-              <div
-                ref={filtersOverlayRef}
-                role="dialog"
-                aria-modal="true"
-                aria-label="Filter by tags"
-                style={{
-                  position: 'absolute',
-                  top: '4rem',
-                  right: '1rem',
-                  zIndex: 302,
-                  minWidth: 260,
-                  padding: '1rem',
-                  background: '#fff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 8,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                  pointerEvents: 'auto',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <h3 style={{ margin: 0, fontSize: '1rem' }}>Filters</h3>
-                  <button type="button" onClick={() => setFiltersOverlayOpen(false)} aria-label="Close">×</button>
-                </div>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.75rem' }}>
-                  <span style={{ fontSize: '0.875rem' }}>Tags</span>
-                  <input
-                    type="text"
-                    value={tagsFilter}
-                    onChange={(e) => setTagsFilter(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (handleApplyTags(), setFiltersOverlayOpen(false))}
-                    placeholder="e.g. urban, night"
-                    style={{ padding: '0.35rem 0.5rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                  />
-                </label>
-                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                  <button type="button" onClick={() => setFiltersOverlayOpen(false)}>Cancel</button>
-                  <button
-                    type="button"
-                    onClick={() => { handleApplyTags(); setFiltersOverlayOpen(false); }}
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-
           {overlayMessage && (
             <div
               style={{
