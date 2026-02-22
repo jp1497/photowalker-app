@@ -1,22 +1,39 @@
 /**
  * Left Explore routes panel (PRD v6 FR-U3).
- * Structure: header (title + close), filters slot, route list slot, Create route button slot.
- * Open state from parent (drawer menu). Close and reopen via Routes in the nav bar.
+ * Step 4.1: Filters (All / My routes), paginated route list, Create route button.
+ * Open state from parent (drawer menu). Bbox from map viewport or default.
  */
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import type { Map as MapLibreMap } from 'maplibre-gl';
+import { getBrowseRoutes } from '../../api/routes';
+import { useMapContext } from '../../contexts/MapContext';
+import { useAuth } from '../../hooks/useAuth';
+import { RouteList } from '../routes/RouteList';
 import { NAV_RAIL_WIDTH } from '../common/DrawerMenu';
+import type { Route } from '../../types/route';
 
 const PANEL_Z_INDEX = 999;
 const PANEL_WIDTH = '30rem';
+const PER_PAGE = 20;
+/** Default bbox when map is not ready (SF area, within backend 200 km² limit). */
+const DEFAULT_BBOX = '-122.44,37.77,-122.30,37.81';
 
 export interface ExploreRoutesPanelProps {
   /** When true, the panel is visible. */
   open: boolean;
   /** Called when the panel should close (e.g. close button). */
   onClose: () => void;
-  /** Optional; Phase 4 will wire route selection to open drawer. */
+  /** Optional; Phase 4.4 will wire route selection to open drawer. */
   onRouteSelect?: (routeId: string) => void;
-  /** Optional; Phase 4 will wire hover/select to highlight route on map. */
+  /** Optional; Phase 4.3 will wire hover/select to highlight route on map. */
   onHighlightRoute?: (routeId: string | null) => void;
+}
+
+function boundsToBbox(bounds: { getSouthWest(): { lng: number; lat: number }; getNorthEast(): { lng: number; lat: number } }): string {
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+  return [sw.lng, sw.lat, ne.lng, ne.lat].join(',');
 }
 
 const closeButtonStyle: React.CSSProperties = {
@@ -59,32 +76,144 @@ const titleStyle: React.CSSProperties = {
   fontWeight: 600,
 };
 
-const slotStyle: React.CSSProperties = {
+const filtersRowStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '0.5rem',
   padding: '0.75rem 1rem',
   borderBottom: '1px solid #e5e7eb',
-  fontSize: '0.875rem',
-  color: '#6b7280',
+  flexShrink: 0,
 };
 
+const filterButtonStyle = (active: boolean): React.CSSProperties => ({
+  padding: '0.35rem 0.75rem',
+  marginRight: '0.5rem',
+  fontWeight: active ? 600 : 400,
+  background: active ? '#e5e7eb' : 'transparent',
+  border: '1px solid #d1d5db',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  fontSize: '0.875rem',
+});
+
 const listSlotStyle: React.CSSProperties = {
-  ...slotStyle,
   flex: 1,
   minHeight: 0,
   overflow: 'auto',
+  padding: 0,
+  borderBottom: 'none',
 };
 
-const createButtonSlotStyle: React.CSSProperties = {
-  padding: '0.75rem 1rem',
+const createButtonStyle: React.CSSProperties = {
+  padding: '0.35rem 0.75rem',
+  fontWeight: 600,
+  background: '#2563eb',
+  color: '#fff',
+  border: 'none',
+  borderRadius: '6px',
+  cursor: 'pointer',
+  fontSize: '0.875rem',
   flexShrink: 0,
-  borderTop: '1px solid #e5e7eb',
 };
 
 export function ExploreRoutesPanel({
   open,
   onClose,
-  onRouteSelect: _onRouteSelect,
-  onHighlightRoute: _onHighlightRoute,
+  onRouteSelect: _onRouteSelect, // Phase 4.4: open route in drawer
+  onHighlightRoute: _onHighlightRoute, // Phase 4.3: highlight route on map
 }: ExploreRoutesPanelProps) {
+  void _onRouteSelect;
+  void _onHighlightRoute;
+  const navigate = useNavigate();
+  const mapContext = useMapContext();
+  const { user, isAuthenticated } = useAuth();
+
+  const [filter, setFilter] = useState<'all' | 'my-routes'>('all');
+  const [routes, setRoutes] = useState<Route[]>([]);
+  const [pagination, setPagination] = useState({ page: 1, per_page: PER_PAGE, total: 0 });
+  const [loading, setLoading] = useState(false);
+  const [bbox, setBbox] = useState<string>(DEFAULT_BBOX);
+  const bboxRef = useRef(bbox);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const moveEndHandlerRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    bboxRef.current = bbox;
+  }, [bbox]);
+
+  useEffect(() => {
+    if (!open || !mapContext) return;
+    const updateBbox = (map: MapLibreMap) => {
+      setBbox(boundsToBbox(map.getBounds()));
+    };
+    const setup = (map: MapLibreMap) => {
+      mapRef.current = map;
+      const handler = () => updateBbox(map);
+      moveEndHandlerRef.current = handler;
+      map.on('moveend', handler);
+      updateBbox(map);
+    };
+    const cleanup = () => {
+      const map = mapRef.current;
+      const handler = moveEndHandlerRef.current;
+      if (map && handler) {
+        map.off('moveend', handler);
+      }
+      mapRef.current = null;
+      moveEndHandlerRef.current = null;
+    };
+    if (mapContext.map) {
+      setup(mapContext.map);
+      return cleanup;
+    }
+    mapContext.onMapReady(setup);
+    return cleanup;
+  }, [open, mapContext]);
+
+  const fetchRoutes = useCallback((page: number) => {
+    setLoading(true);
+    const authorId = filter === 'my-routes' && user?.id ? user.id : undefined;
+    getBrowseRoutes({
+      bbox: bboxRef.current,
+      page,
+      per_page: PER_PAGE,
+      sort: 'created_at',
+      ...(authorId ? { author_id: authorId } : {}),
+    })
+      .then((res) => {
+        setRoutes(res.routes);
+        setPagination(res.pagination);
+      })
+      .catch(() => {
+        setRoutes([]);
+        setPagination((p) => ({ ...p, total: 0 }));
+      })
+      .finally(() => setLoading(false));
+  }, [filter, user]);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => fetchRoutes(1), 0);
+    return () => clearTimeout(t);
+  }, [open, bbox, fetchRoutes]);
+
+  const handlePageChange = useCallback((page: number) => {
+    fetchRoutes(page);
+  }, [fetchRoutes]);
+
+  const handleRouteClick = useCallback((slug: string) => {
+    navigate(`/routes/${slug}`);
+  }, [navigate]);
+
+  const handleCreateRoute = useCallback(() => {
+    if (isAuthenticated) {
+      navigate('/routes/create');
+    } else {
+      navigate('/login?redirect=' + encodeURIComponent('/routes/create'));
+    }
+  }, [isAuthenticated, navigate]);
+
   if (!open) return null;
 
   return (
@@ -99,14 +228,39 @@ export function ExploreRoutesPanel({
           ×
         </button>
       </header>
-      <div style={slotStyle} data-slot="filters">
-        Filters (All, My routes)
+      <div style={filtersRowStyle} data-slot="filters">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+          <button
+            type="button"
+            style={filterButtonStyle(filter === 'all')}
+            onClick={() => setFilter('all')}
+            aria-pressed={filter === 'all'}
+          >
+            All
+          </button>
+          {isAuthenticated && (
+            <button
+              type="button"
+              style={filterButtonStyle(filter === 'my-routes')}
+              onClick={() => setFilter('my-routes')}
+              aria-pressed={filter === 'my-routes'}
+            >
+              My routes
+            </button>
+          )}
+        </div>
+        <button type="button" onClick={handleCreateRoute} style={createButtonStyle} data-slot="create-route">
+          Create route
+        </button>
       </div>
       <div style={listSlotStyle} data-slot="route-list">
-        Route list
-      </div>
-      <div style={createButtonSlotStyle} data-slot="create-route">
-        Create route
+        <RouteList
+          routes={routes}
+          pagination={pagination}
+          loading={loading}
+          onPageChange={handlePageChange}
+          onRouteClick={handleRouteClick}
+        />
       </div>
     </div>
   );
