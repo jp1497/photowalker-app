@@ -23,6 +23,11 @@ Use the roadmap step's **Definition of Done** as the authoritative completion ch
 ## User-Stated Design Overrides Spec
 
 When the user **explicitly** states a design preference, mental model, or future intent that differs from the roadmap or PRD (e.g. "remove the menu button," "panel beside the nav," "translates to bottom nav on mobile"), treat the user's statement as the current authority and implement accordingly. Do not refuse on the grounds that the written spec says something different. Document divergence if needed per Design Doc and Implementation Divergence.
+- **Optional spec behaviour:** When the user says an optional behaviour is not needed (e.g. "collapse isn't needed, can reopen from nav"), remove or simplify that behaviour rather than retaining it for spec compliance.
+
+## Demo Triggers for Unwired UI
+
+When delivering a **new UI component** whose real trigger will be added in a later step (e.g. a lightbox that will open from a map pin click in a future phase), add a **temporary demo trigger** (e.g. a button or test-only entry point) so the user can verify the component before the full integration exists. Mark the trigger as temporary in code or comments and remove it when the real integration is in place.
 
 ## User Intensifiers and Defaults
 

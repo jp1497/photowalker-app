@@ -56,6 +56,15 @@ alwaysApply: false
 ## Layout: Persistent Chrome and Sibling Panels
 
 - When a chrome element (nav, sidebar) is **always visible** rather than toggle-open, position any dependent panels or overlays so they appear **adjacent** to that chrome (e.g. panel `left` = nav width), so the whole reads as one coherent unit. Do not leave panels as full-viewport overlays once the chrome is persistent.
+- When adding a **new** fixed-position overlay (drawer, panel, modal), use the same canonical layout constant (e.g. nav rail width) so the overlay aligns with the chrome—e.g. bottom drawer `left` = nav width so it starts where the menu bar ends.
+
+## Layout: Modals and Overlays Inside pointer-events: none
+
+- When a modal, lightbox, or overlay is rendered inside a parent that has `pointer-events: none` (e.g. a map shell or pointer-events-none wrapper), set **`pointer-events: auto`** on the overlay root element. Otherwise the overlay cannot receive clicks (close button, backdrop, links) and will appear non-interactive; tests that click inside the overlay will fail with "Unable to perform pointer interaction as the element has pointer-events: none."
+
+## Layout: Dense Chrome and Button Visibility
+
+- When placing **multiple controls** in the same corner (e.g. top-right), avoid a single row if it causes overlap or one control to be hidden by others (e.g. account icon, other chrome). Use vertical stacking (separate rows) or sufficient spacing so each control is visible and clickable.
 
 ## Expected UI or Changes Not Visible
 
@@ -74,6 +83,10 @@ alwaysApply: false
 ## Testing: Conditional Rendering Changes
 
 - When adding **conditional rendering** that hides previously-visible elements (e.g. hide a button when an overlay is open), update tests that assert or interact with those elements. The element may no longer be present in the DOM in the tested state; adjust assertions and interaction flow accordingly (e.g. assert on the overlay instead, or test the closed state first).
+
+## Testing: Callback Invocation Assertions
+
+- When asserting that a callback was invoked (e.g. `onClose`, `onOpenRoute`), prefer **`toHaveBeenCalled()`** over **`toHaveBeenCalledTimes(1)`** if the callback can legitimately be invoked from multiple code paths or as a side effect of framework behaviour (e.g. React Strict Mode double-invoking effects). Asserting exact call count in those cases leads to flaky tests.
 
 ## Types: API Response and Minimal Component Props
 
