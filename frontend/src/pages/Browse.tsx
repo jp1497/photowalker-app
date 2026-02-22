@@ -18,6 +18,8 @@ import { useMapContext } from '../contexts/MapContext';
 import {
   createDefaultPinImageData,
   imageToPinImageData,
+  MAP_PIN_RASTER_SIZE,
+  PIN_ICON_SIZE,
 } from '../components/map/pinImageUtils';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { getWelcomeDismissed, WelcomeModal } from '../components/common/WelcomeModal';
@@ -53,8 +55,7 @@ const BROWSE_PHOTOS_HIDE_PINS_WITHOUT_THUMBNAIL = true;
  *   stay small until you zoom in, then get clearly bigger.
  */
 const BROWSE_PHOTOS_ZOOM_SIZE: [number, number][] = [
-  [8, 0.5],
-  [12, 1],
+  [12, 0.5],
   [16, 2],
   [24, 15],
   
@@ -444,9 +445,9 @@ export function Browse() {
     });
   }, [routesWithPhoto]);
 
-  /** Add pin images for browse-photos layer: default-pin + one per photo id (thumbnail or fallback). */
+  /** Add pin images for browse-photos layer: default-pin + one per photo id (thumbnail or fallback). Uses MAP_PIN_RASTER_SIZE so zooming scales a higher-res bitmap. */
   const addBrowsePhotoImagesToMap = useCallback((map: MapLibreMap) => {
-    const defaultPin = createDefaultPinImageData();
+    const defaultPin = createDefaultPinImageData(MAP_PIN_RASTER_SIZE);
     if (!map.getStyle()) return;
     if (!map.hasImage('default-pin')) {
       map.addImage('default-pin', defaultPin);
@@ -460,7 +461,7 @@ export function Browse() {
           if (!map.getStyle()) return;
           try {
             if (map.hasImage(id)) map.removeImage(id);
-            const pinData = imageToPinImageData(img);
+            const pinData = imageToPinImageData(img, MAP_PIN_RASTER_SIZE);
             map.addImage(id, pinData);
           } catch {
             /* layer/source may be gone */
@@ -576,7 +577,7 @@ export function Browse() {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       });
-      const defaultPin = createDefaultPinImageData();
+      const defaultPin = createDefaultPinImageData(MAP_PIN_RASTER_SIZE);
       if (!mapApi.hasImage('default-pin')) {
         mapApi.addImage('default-pin', defaultPin);
       }
@@ -586,7 +587,7 @@ export function Browse() {
         source: BROWSE_PHOTOS_SOURCE_ID,
         layout: {
           'icon-image': ['coalesce', ['get', 'photoId'], 'default-pin'],
-          'icon-size': 1,
+          'icon-size': (PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE) * iconSizeAtZoom(mapApi.getZoom()),
           'icon-allow-overlap': true,
           'icon-ignore-placement': true,
         },
@@ -594,7 +595,8 @@ export function Browse() {
       zoomHandler = () => {
         try {
           if (mapApi.getLayer(BROWSE_PHOTOS_LAYER_ID)) {
-            mapApi.setLayoutProperty(BROWSE_PHOTOS_LAYER_ID, 'icon-size', iconSizeAtZoom(mapApi.getZoom()));
+            const zoom = mapApi.getZoom();
+            mapApi.setLayoutProperty(BROWSE_PHOTOS_LAYER_ID, 'icon-size', (PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE) * iconSizeAtZoom(zoom));
           }
         } catch {
           /* layer/source may be gone */
