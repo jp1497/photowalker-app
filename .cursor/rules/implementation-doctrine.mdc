@@ -89,3 +89,19 @@ When asserting on GeoJSON coordinates from geometry (e.g. Shapely `mapping(to_sh
 ## Conditional Simplification and Null Safety
 
 When you **simplify a conditional** (e.g. change `if (!a || !b)` to `if (!a)`), re-audit the block that runs when the condition is true. No code in that block may use a variable that is now guaranteed to be null or undefined there (e.g. in the `if (!map)` branch, do not call `map.getSource(...)`). Otherwise you introduce a runtime error that static analysis may not catch.
+
+## Preserve Primary Behavior When Adding Secondary Sync
+
+When adding **URL sync, analytics, or another secondary channel** to an existing interaction (e.g. panel selection, highlight state), **update the primary state first**, then sync to the secondary channel. Do not make the secondary channel the single source of truth for the primary interaction (e.g. "state is derived only from URL") or the primary path becomes indirect, delayed, or broken. Extend the flow (e.g. set state then update search params), do not replace it.
+
+## Respect User Reverts and Kept Code
+
+When the user **explicitly reverts a change** or states they **kept the previous implementation** (e.g. "I had to revert your change" or "don't remove X"), treat the reverted or kept code as the current desired state. Do not re-apply the removed approach in a later step or assume the simplification was accepted. Check the codebase and the user's last stated preference before removing or replacing that behavior again.
+
+## Revert-to-Previous-Commit Behavior
+
+When the user asks to **revert behavior to a previous commit** (e.g. "revert to that of the previous commit"), use **version control** to inspect that commit (`git show <commit> -- <file>`) and match its behavior precisely. Restore the interaction path (e.g. direct state update vs URL-derived state) rather than guessing from memory.
+
+## Avoid Collapsing Working Implementations Without Request
+
+Do not **collapse working, isolated implementations** (e.g. a separate map layer, a dedicated component) into a "simpler" single path (e.g. one layer with data-driven styling) unless the user has requested the simplification and validated the result. Complexity (separate layer, explicit timing, isolated state) is often justified by fewer edge cases and clearer behavior; removing it can introduce bugs the user will have to revert.
