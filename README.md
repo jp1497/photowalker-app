@@ -25,7 +25,7 @@ Photowalker enables photographers to create curated routes on a map, attach geol
 
 ```bash
 cd backend
-python -m venv .venv
+python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/uvicorn app.main:app --reload
 ```
