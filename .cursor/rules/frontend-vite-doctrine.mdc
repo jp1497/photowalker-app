@@ -71,6 +71,7 @@ alwaysApply: false
 - When the user reports that new or changed UI is not visible (e.g. "I don't see the button" or "nothing was added") **and the code is present in the repo**, consider **environment and runtime** before changing layout or visibility.
 - **Port / process mismatch:** The dev server may be running on a different port (e.g. 5174) if the default (e.g. 5173) was in use. The user may be viewing the old port and thus a different process or stale app. Have them confirm the URL and the port printed in the terminal where the dev server started; suggest a hard refresh (Cmd+Shift+R / Ctrl+Shift+R) or opening the URL the server actually reports.
 - **Make the port predictable:** Use `server.port` and `server.strictPort: true` (Vite) so the server fails fast on the default port instead of silently using another; document how to free the port if needed.
+- **API or backend behavior not updating:** When a backend/API change doesn't appear (e.g. new endpoint returns 404, or "fix didn't work" for an API call), the backend may be running from a **built artifact** (e.g. Docker image). Code changes require rebuild/redeploy. See Implementation Doctrine: Docker vs Local Backend.
 
 ## Testing: Match Project Assertion Style and Setup
 

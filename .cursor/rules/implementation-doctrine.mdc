@@ -16,6 +16,23 @@ When configuring healthchecks, OpenAPI, or integration points, **verify paths an
 - OpenAPI: The live spec at `/openapi.json` when the app runs is canonical; static specs can drift
 - Docker healthcheck: Use the path that exists in the app; prefer stdlib (e.g. `urllib.request`) over external tools (curl) in slim images
 
+## Docker vs Local Backend
+
+- When the backend runs in **Docker** (`docker compose up`), the container uses an **image built at build time**. Code changes do not apply until you **rebuild** and restart.
+- **After changing backend code** while using Docker: `docker compose build backend && docker compose up -d` (or `docker compose up -d --build backend`).
+- If "fix didn't work" or "no logs from new code," confirm **which process** is serving requests (local uvicorn vs Docker). If Docker, rebuild the image before re-testing.
+- For fast iteration on backend only, run Postgres/Redis via Docker and the API locally: `docker compose up -d postgres redis worker` then `cd backend && .venv/bin/uvicorn app.main:app --reload`. Stop the backend container to free port 8000.
+
+## FastAPI Route Order
+
+- FastAPI/Starlette matches routes in **declaration order**. A parametric path like `GET /{slug}` will match a literal segment (e.g. `from-photos`) if that route is tried first.
+- **Register static path segments before parametric ones** on the same router. Example: define `POST /from-photos` (or any literal path under `/v1/routes`) **before** `GET /{slug}` in `backend/app/api/v1/routes.py`. Otherwise `POST /v1/routes/from-photos` can be matched by `GET /{slug}` and return 405 Method Not Allowed.
+- Keep route handlers in their **logical module** (e.g. route creation in `routes.py`). Fix ordering on the same router rather than moving endpoints to another module to avoid path conflicts.
+
+## Fix Placement Over Workarounds
+
+- Prefer fixing the root cause in the correct place (e.g. route declaration order) over workarounds that move functionality to a different module. Preserve logical grouping and discoverability.
+
 ## Definition of Done as Scope Boundary
 
 Use the roadmap step's **Definition of Done** as the authoritative completion checklist. Do not add scope beyond it. Each checkbox in the DoD is a deliverable; when all are satisfied, the step is complete. Avoid over-engineering or "helpful" extras that are outside the step.
