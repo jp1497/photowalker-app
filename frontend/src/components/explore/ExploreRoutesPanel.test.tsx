@@ -1,6 +1,6 @@
 /** Unit tests for ExploreRoutesPanel: filters All/My routes, route list, Create route button. */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ExploreRoutesPanel } from './ExploreRoutesPanel';
 import * as routesApi from '../../api/routes';
@@ -141,5 +141,35 @@ describe('ExploreRoutesPanel', () => {
     await screen.findByText(/no routes found/i);
     const panel = container.querySelector('[style*="30rem"]');
     expect(panel).toBeTruthy();
+  });
+
+  it('route card pointerdown calls onHighlightRoute (tap-to-highlight for touch, PRD v6 Phase 8)', async () => {
+    const onHighlightRoute = vi.fn();
+    mockGetBrowseRoutes.mockResolvedValue({
+      routes: [
+        {
+          id: 'r1',
+          user_id: 'u1',
+          slug: 'test-route',
+          title: 'Test Route',
+          description: '',
+          route_geometry: { type: 'LineString', coordinates: [[-122.4, 37.8], [-122.38, 37.82]] },
+          distance_meters: 1000,
+          is_public: true,
+          first_photo_id: null,
+          created_at: '2025-01-01T00:00:00Z',
+          updated_at: '2025-01-01T00:00:00Z',
+          tags: [],
+        },
+      ],
+      pagination: { page: 1, per_page: 20, total: 1 },
+    });
+    render(<ExploreRoutesPanel open onClose={() => {}} onHighlightRoute={onHighlightRoute} />);
+    await screen.findByText('Test Route');
+    const card = screen.getByRole('button', { name: /test route/i });
+    card.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
+    await waitFor(() => {
+      expect(onHighlightRoute).toHaveBeenCalledWith('test-route');
+    });
   });
 });

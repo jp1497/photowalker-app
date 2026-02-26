@@ -658,7 +658,7 @@ This roadmap defines the phased implementation of the UI overhaul in PRD v6. It 
 
 1. **Unit tests:** Update tests that assume old layout or entry points: (a) **Routing:** `/` redirects to `/browse`; welcome modal on browse when not authenticated and not dismissed. (b) **Browse:** Default view shows photo/route pins; click opens lightbox or drawer; no route list on browse. (c) **Explore panel:** Open from menu; filters All/My routes; route list and Create button; route card click opens drawer; hover/select highlights on map. (d) **Bottom drawer:** Route view and create flow render in drawer; peek/expand and close. (e) **Account:** Top-right icon only; dropdown has Sign in, Settings, Sign out only. (f) **My routes:** Only in panel as filter; /routes/me route removed. Preserve or add mocks for MapView, MapPicker, api client where appropriate.
 2. **E2E:** If the project has E2E tests, update them for new entry points (no Home at /, drawer menu with Browse and Routes only, no /routes/me, account in top-right). Add or update smoke: land on browse → welcome if not signed in → dismiss → see map; open drawer → Routes → panel opens → see route list → click Create route (login redirect or drawer).
-3. Run full test suite and fix failures; run lint. Document **UAT checklist** (below) in the roadmap or in a separate UAT file for manual verification.
+3. Run full test suite and fix failures; run lint. Document **UAT checklist** (below) in the roadmap or in a separate UAT file for manual verification. See **[Design/UAT_CHECKLIST_V6.md](./UAT_CHECKLIST_V6.md)** for the manual sign-off checklist.
 
 #### Definition of Done
 
