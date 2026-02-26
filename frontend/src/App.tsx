@@ -87,9 +87,11 @@ function MapShellLayout() {
           ? 'detail'
           : 'home';
 
+  const preserveViewport = !!(location.state as { preserveViewport?: boolean })?.preserveViewport;
+
   return (
     <HighlightedRouteContext.Provider value={{ highlightedRouteSlug, highlightedLayerReady }}>
-      <MapShell mode={mode} slug={slug ?? null}>
+      <MapShell mode={mode} slug={slug ?? null} preserveViewport={preserveViewport}>
         <Outlet />
         <HighlightedRouteLayer
           highlightedRouteSlug={highlightedRouteSlug}

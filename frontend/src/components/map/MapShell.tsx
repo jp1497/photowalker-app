@@ -12,11 +12,13 @@ export interface MapShellProps {
   mode?: MapShellMode;
   /** Route slug when viewing a route (detail mode). */
   slug?: string | null;
+  /** When true, map keeps current viewport (no jumpTo from preferred center/zoom). Used when navigating to create or route detail. */
+  preserveViewport?: boolean;
   /** Route content and overlays. */
   children?: ReactNode;
 }
 
-export function MapShell({ children }: MapShellProps) {
+export function MapShell({ children, preserveViewport }: MapShellProps) {
   const { center, zoom, loading } = usePreferredMapCenter();
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const pendingCallbacksRef = useRef<Set<(m: MapLibreMap) => void>>(new Set());
@@ -66,6 +68,7 @@ export function MapShell({ children }: MapShellProps) {
           <MapView
             center={center}
             zoom={zoom}
+            preserveViewport={preserveViewport}
             onMapReady={handleMapReady}
             style={{ width: '100%', height: '100%' }}
           />

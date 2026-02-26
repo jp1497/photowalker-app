@@ -26,15 +26,16 @@ def _route_to_response(route) -> dict:
     return {"route": route_data, "photos": photos}
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
-async def create_route(
-    body: RouteCreate,
+# Static path before GET /{slug} so POST /from-photos is not matched as slug="from-photos" (avoids 405).
+@router.post("/from-photos", status_code=status.HTTP_201_CREATED)
+async def create_route_from_photos(
+    body: RouteFromPhotosCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_required),
 ) -> dict:
-    """Create a route. Auth required."""
+    """Create a route from ordered photo locations. PRD v3 - FR-R1. Auth required."""
     try:
-        route = await route_service.create_route(db, current_user.id, body)
+        route = await route_service.create_route_from_photos(db, current_user.id, body)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -49,15 +50,15 @@ async def create_route(
     return payload
 
 
-@router.post("/from-photos", status_code=status.HTTP_201_CREATED)
-async def create_route_from_photos(
-    body: RouteFromPhotosCreate,
+@router.post("", status_code=status.HTTP_201_CREATED)
+async def create_route(
+    body: RouteCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_required),
 ) -> dict:
-    """Create a route from ordered photo locations. PRD v3 - FR-R1. Auth required."""
+    """Create a route. Auth required."""
     try:
-        route = await route_service.create_route_from_photos(db, current_user.id, body)
+        route = await route_service.create_route(db, current_user.id, body)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -1,14 +1,22 @@
 /** Photo-first create route: upload photos, place on map, reorder, submit to POST /v1/routes/from-photos. PRD v3 FR-R1. */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import { MapView } from '../components/map/MapView';
 import { MapPicker } from '../components/map/MapPicker';
-import { createPhotoMarkerElement } from '../components/map/PhotoMarker';
+import {
+  browsePinIconSizeAtZoom,
+  createDefaultPinImageData,
+  imageToPinImageData,
+  MAP_PIN_RASTER_SIZE,
+  PIN_BORDER_WIDTH,
+  PIN_ICON_SIZE,
+} from '../components/map/pinImageUtils';
+import { BottomDrawer } from '../components/common/BottomDrawer';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { useMapContext } from '../contexts/MapContext';
-import { uploadPhoto, updatePhoto, getPhotoImageUrl } from '../api/photos';
+import { uploadPhoto, updatePhoto, fetchPhotoImageBlob } from '../api/photos';
 import { apiClient } from '../api/client';
 import { createRouteFromPhotos } from '../api/routes';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -23,8 +31,11 @@ const TITLE_MAX = 100;
 const MAX_TAGS = 5;
 const MAX_PHOTOS = 50;
 
-const ROUTE_PREVIEW_SOURCE_ID = 'route-preview-line';
-const ROUTE_PREVIEW_LAYER_ID = 'route-preview-line-layer';
+/** Same IDs as RouteView so create preview looks identical to route detail. */
+const ROUTE_SOURCE_ID = 'route-line';
+const ROUTE_LAYER_ID = 'route-line-layer';
+const PHOTOS_SOURCE_ID = 'route-photos';
+const PHOTOS_LAYER_ID = 'route-photos-layer';
 
 function getBoundsFromCoords(coords: [number, number][]): [[number, number], [number, number]] {
   if (coords.length === 0) return [[-122.42, 37.78], [-122.4, 37.8]];
@@ -43,43 +54,31 @@ function getBoundsFromCoords(coords: [number, number][]): [[number, number], [nu
   return [[minLng - pad, minLat - pad], [maxLng + pad, maxLat + pad]];
 }
 
-/** Fetches thumbnail (with auth), creates object URL, reports to parent. Parent owns URL so it survives reorder. */
-function ThumbnailLoader({
-  photoId,
-  onLoaded,
-  style,
-}: {
-  photoId: string;
-  onLoaded: (photoId: string, url: string) => void;
-  style: React.CSSProperties;
-}) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const opts = { responseType: 'blob' as const, signal: controller.signal };
-    const attach = (res: { data: Blob }) => {
-      const objectUrl = URL.createObjectURL(res.data);
-      setUrl(objectUrl);
-      onLoaded(photoId, objectUrl);
-    };
-    apiClient
-      .get(getPhotoImageUrl(photoId, 'thumbnail'), opts)
-      .then(attach)
-      .catch(() => apiClient.get(getPhotoImageUrl(photoId, 'original'), opts).then(attach))
-      .catch(() => setUrl(null));
-    return () => controller.abort();
-  }, [photoId, onLoaded]);
-
-  if (!url) {
-    return (
-      <div style={{ ...style, background: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: '0.75rem' }}>
-        Loading…
-      </div>
-    );
+function buildPhotosGeoJSON(photos: Photo[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
+  const features: GeoJSON.Feature<GeoJSON.Point>[] = [];
+  for (const photo of photos) {
+    const coords = photo.location?.coordinates;
+    if (!coords || coords.length < 2) continue;
+    features.push({
+      type: 'Feature',
+      properties: { photoId: photo.id },
+      geometry: { type: 'Point', coordinates: [coords[0], coords[1]] },
+    });
   }
-  return <img src={url} alt="" style={style} />;
+  return { type: 'FeatureCollection', features };
 }
+
+const thumbnailPlaceholderStyle: React.CSSProperties = {
+  width: 48,
+  height: 48,
+  background: '#eee',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: '#666',
+  fontSize: '0.75rem',
+  borderRadius: 4,
+};
 
 export function CreateRouteFromPhotos() {
   const navigate = useNavigate();
@@ -99,19 +98,57 @@ export function CreateRouteFromPhotos() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(true);
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
-  const drawerRef = useRef<HTMLDivElement>(null);
-  const floatingButtonRef = useRef<HTMLButtonElement>(null);
   const placePhotoModalRef = useRef<HTMLDivElement>(null);
   const thumbnailUrlsRef = useRef<Record<string, string>>({});
-  const markersRef = useRef<maplibregl.Marker[]>([]);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const zoomHandlerRef = useRef<(() => void) | null>(null);
+  const photoIdsOnMapRef = useRef<Set<string>>(new Set());
   thumbnailUrlsRef.current = thumbnailUrls;
+  const preserveViewport = !!(location.state && typeof location.state === 'object' && 'preserveViewport' in location.state && (location.state as { preserveViewport?: boolean }).preserveViewport);
 
-  const handleThumbnailLoaded = useCallback((photoId: string, url: string) => {
-    setThumbnailUrls((prev) => ({ ...prev, [photoId]: url }));
-  }, []);
+  /** Fetch thumbnails with auth (same pattern as RouteView/Browse). Parent-owned URLs survive reorder. */
+  useEffect(() => {
+    if (photos.length === 0) return;
+    let cancelled = false;
+    const seen = new Set<string>();
+    photos.forEach((p) => {
+      if (seen.has(p.id)) return;
+      seen.add(p.id);
+      fetchPhotoImageBlob(p.id, 'thumbnail')
+        .then((blob) => {
+          if (cancelled) return;
+          const url = URL.createObjectURL(blob);
+          setThumbnailUrls((prev) => {
+            const next = { ...prev, [p.id]: url };
+            thumbnailUrlsRef.current = next;
+            return next;
+          });
+        })
+        .catch(() =>
+          fetchPhotoImageBlob(p.id, 'original').then((blob) => {
+            if (cancelled) return;
+            const url = URL.createObjectURL(blob);
+            setThumbnailUrls((prev) => {
+              const next = { ...prev, [p.id]: url };
+              thumbnailUrlsRef.current = next;
+              return next;
+            });
+          })
+        )
+        .catch(() => {
+          if (cancelled) return;
+          setThumbnailUrls((prev) => ({ ...prev, [p.id]: '' }));
+        });
+    });
+    return () => {
+      cancelled = true;
+      Object.values(thumbnailUrlsRef.current).forEach((u) => {
+        if (u) URL.revokeObjectURL(u);
+      });
+      thumbnailUrlsRef.current = {};
+    };
+  }, [photos]);
 
   const tags = tagsInput
     .split(',')
@@ -123,6 +160,11 @@ export function CreateRouteFromPhotos() {
     .map((p) => p.location?.coordinates)
     .filter((c): c is number[] => c != null && c.length >= 2) as [number, number][] | [];
   const hasLine = coordinates.length >= 2;
+  const photosWithLocation = useMemo(
+    () => photos.filter((p) => (p.location?.coordinates?.length ?? 0) >= 2),
+    [photos]
+  );
+  photoIdsOnMapRef.current = new Set(photosWithLocation.map((p) => p.id));
 
   const handleFiles = useCallback(
     async (files: FileList | null) => {
@@ -202,51 +244,134 @@ export function CreateRouteFromPhotos() {
     if (photoToPlace?.id === photoId) setPhotoToPlace(null);
   }, [photoToPlace?.id]);
 
+  /** Pin images at MAP_PIN_RASTER_SIZE to match route detail (thumbnail sizing). */
+  const addImagesToMap = useCallback((map: maplibregl.Map) => {
+    const defaultPin = createDefaultPinImageData(MAP_PIN_RASTER_SIZE);
+    if (!map.getStyle()) return;
+    if (!map.hasImage('default-pin')) {
+      map.addImage('default-pin', defaultPin);
+    }
+    photosWithLocation.forEach((p) => {
+      const url = thumbnailUrlsRef.current[p.id];
+      if (url) {
+        const img = new Image();
+        img.onload = () => {
+          if (!map.getStyle()) return;
+          try {
+            if (map.hasImage(p.id)) map.removeImage(p.id);
+            const pinData = imageToPinImageData(img, MAP_PIN_RASTER_SIZE);
+            map.addImage(p.id, pinData);
+          } catch {
+            /* layer/source may be gone */
+          }
+        };
+        img.src = url;
+      } else {
+        try {
+          if (!map.hasImage(p.id)) map.addImage(p.id, defaultPin);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+  }, [photosWithLocation]);
+
   const updateMap = useCallback(
     (map: maplibregl.Map) => {
-      markersRef.current.forEach((m) => {
-        try {
-          m.remove();
-        } catch {
-          /* defensive */
-        }
-      });
-      markersRef.current = [];
-
       if (hasLine) {
-        if (map.getSource(ROUTE_PREVIEW_SOURCE_ID)) {
-          (map.getSource(ROUTE_PREVIEW_SOURCE_ID) as maplibregl.GeoJSONSource).setData({
-            type: 'Feature',
-            properties: {},
-            geometry: { type: 'LineString', coordinates },
-          });
+        const lineGeojson: GeoJSON.Feature<GeoJSON.LineString> = {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates },
+        };
+        if (map.getSource(ROUTE_SOURCE_ID)) {
+          (map.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource).setData(lineGeojson);
         } else {
-          map.addSource(ROUTE_PREVIEW_SOURCE_ID, {
-            type: 'geojson',
-            data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates } },
-          });
+          map.addSource(ROUTE_SOURCE_ID, { type: 'geojson', data: lineGeojson });
           map.addLayer({
-            id: ROUTE_PREVIEW_LAYER_ID,
+            id: ROUTE_LAYER_ID,
             type: 'line',
-            source: ROUTE_PREVIEW_SOURCE_ID,
+            source: ROUTE_SOURCE_ID,
             layout: { 'line-join': 'round', 'line-cap': 'round' },
             paint: { 'line-color': '#2563eb', 'line-width': 4 },
           });
         }
+        if (!preserveViewport) {
+          try {
+            map.fitBounds(getBoundsFromCoords(coordinates), { padding: 40, maxZoom: 14, duration: 300 });
+          } catch {
+            /* bounds may be invalid */
+          }
+        }
+      } else {
         try {
-          map.fitBounds(getBoundsFromCoords(coordinates), { padding: 40, maxZoom: 14, duration: 300 });
+          if (map.getLayer(ROUTE_LAYER_ID)) map.removeLayer(ROUTE_LAYER_ID);
+          if (map.getSource(ROUTE_SOURCE_ID)) map.removeSource(ROUTE_SOURCE_ID);
         } catch {
-          /* bounds may be invalid */
+          /* ignore */
         }
       }
 
-      coordinates.forEach(([lng, lat]) => {
-        const el = createPhotoMarkerElement();
-        const marker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
-        markersRef.current.push(marker);
-      });
+      const photosGeojson = buildPhotosGeoJSON(photos);
+      if (photosWithLocation.length === 0) {
+        try {
+          if (map.getLayer(PHOTOS_LAYER_ID)) map.removeLayer(PHOTOS_LAYER_ID);
+          if (map.getSource(PHOTOS_SOURCE_ID)) map.removeSource(PHOTOS_SOURCE_ID);
+        } catch {
+          /* ignore */
+        }
+        addImagesToMap(map);
+        return;
+      }
+      if (map.getSource(PHOTOS_SOURCE_ID)) {
+        (map.getSource(PHOTOS_SOURCE_ID) as maplibregl.GeoJSONSource).setData(photosGeojson);
+        addImagesToMap(map);
+        return;
+      }
+      {
+        map.addSource(PHOTOS_SOURCE_ID, { type: 'geojson', data: photosGeojson });
+        const defaultPin = createDefaultPinImageData(MAP_PIN_RASTER_SIZE);
+        if (!map.hasImage('default-pin')) {
+          map.addImage('default-pin', defaultPin);
+        }
+        photosWithLocation.forEach((p) => {
+          if (map.hasImage(p.id)) return;
+          try {
+            map.addImage(p.id, defaultPin);
+          } catch {
+            /* ignore */
+          }
+        });
+        const iconSizeScale = (PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE) * browsePinIconSizeAtZoom(map.getZoom());
+        map.addLayer({
+          id: PHOTOS_LAYER_ID,
+          type: 'symbol',
+          source: PHOTOS_SOURCE_ID,
+          layout: {
+            'icon-image': ['coalesce', ['get', 'photoId'], 'default-pin'],
+            'icon-size': iconSizeScale,
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+          },
+        });
+        const zoomHandler = () => {
+          try {
+            const zoom = map.getZoom();
+            const scale = (PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE) * browsePinIconSizeAtZoom(zoom);
+            if (map.getLayer(PHOTOS_LAYER_ID)) {
+              map.setLayoutProperty(PHOTOS_LAYER_ID, 'icon-size', scale);
+            }
+          } catch {
+            /* layer/source may be gone */
+          }
+        };
+        zoomHandlerRef.current = zoomHandler;
+        map.on('zoom', zoomHandler);
+      }
+
+      addImagesToMap(map);
     },
-    [coordinates, hasLine]
+    [coordinates, hasLine, photos, photosWithLocation, preserveViewport, addImagesToMap]
   );
 
   const handleMapReady = useCallback(
@@ -270,20 +395,35 @@ export function CreateRouteFromPhotos() {
   }, [updateMap]);
 
   useEffect(() => {
+    if (!mapContext) return;
+    const map = mapRef.current;
+    if (map) addImagesToMap(map);
+  }, [thumbnailUrls, addImagesToMap, mapContext]);
+
+  useEffect(() => {
     return () => {
       const map = mapRef.current;
-      markersRef.current.forEach((m) => {
+      if (zoomHandlerRef.current && map) {
         try {
-          m.remove();
+          map.off('zoom', zoomHandlerRef.current);
         } catch {
           /* ignore */
         }
-      });
-      markersRef.current = [];
+        zoomHandlerRef.current = null;
+      }
       if (map) {
         try {
-          if (map.getLayer(ROUTE_PREVIEW_LAYER_ID)) map.removeLayer(ROUTE_PREVIEW_LAYER_ID);
-          if (map.getSource(ROUTE_PREVIEW_SOURCE_ID)) map.removeSource(ROUTE_PREVIEW_SOURCE_ID);
+          if (map.getLayer(PHOTOS_LAYER_ID)) map.removeLayer(PHOTOS_LAYER_ID);
+          if (map.getLayer(ROUTE_LAYER_ID)) map.removeLayer(ROUTE_LAYER_ID);
+          if (map.getSource(PHOTOS_SOURCE_ID)) map.removeSource(PHOTOS_SOURCE_ID);
+          if (map.getSource(ROUTE_SOURCE_ID)) map.removeSource(ROUTE_SOURCE_ID);
+          photoIdsOnMapRef.current.forEach((id) => {
+            try {
+              if (map.hasImage(id)) map.removeImage(id);
+            } catch {
+              /* ignore */
+            }
+          });
         } catch {
           /* defensive teardown */
         }
@@ -328,7 +468,7 @@ export function CreateRouteFromPhotos() {
       setIsSubmitting(true);
       try {
         const { route } = await createRouteFromPhotos(payload);
-        navigate(`/routes/${route.slug}`, { replace: true });
+        navigate(`/routes/${route.slug}`, { replace: true, state: { openDrawer: true, preserveViewport: true } });
       } catch (err: unknown) {
         const msg =
           (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ??
@@ -347,51 +487,19 @@ export function CreateRouteFromPhotos() {
   const isShellMap = !!mapContext;
 
   useEffect(() => {
-    if (location.state && typeof location.state === 'object' && 'openDrawer' in location.state && location.state.openDrawer) {
-      setDrawerOpen(true);
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-  }, [location.state, location.pathname, navigate]);
-
-  useEffect(() => {
     if (!isShellMap) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (photoToPlace) {
-          setPhotoToPlace(null);
-          setPickedCoords(null);
-          setPlaceError(null);
-        } else {
-          setDrawerOpen(false);
-        }
+      if (e.key === 'Escape' && photoToPlace) {
+        setPhotoToPlace(null);
+        setPickedCoords(null);
+        setPlaceError(null);
       }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isShellMap, photoToPlace]);
 
-  useFocusTrap(drawerRef, { active: isShellMap && drawerOpen && !photoToPlace });
   useFocusTrap(placePhotoModalRef, { active: !!photoToPlace });
-
-  useEffect(() => {
-    if (!drawerOpen && isShellMap && !photoToPlace) floatingButtonRef.current?.focus();
-  }, [drawerOpen, isShellMap, photoToPlace]);
-
-  const drawerTop = '6rem';
-  const floatingButtonStyle = {
-    position: 'absolute' as const,
-    top: '3.5rem',
-    left: '0.75rem',
-    zIndex: 500,
-    padding: '0.5rem 0.75rem',
-    fontSize: '0.875rem',
-    border: '1px solid #d1d5db',
-    borderRadius: 6,
-    background: 'rgba(255,255,255,0.95)',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    cursor: 'pointer' as const,
-    pointerEvents: 'auto' as const,
-  };
 
   const createContent = (
     <>
@@ -468,11 +576,9 @@ export function CreateRouteFromPhotos() {
                         style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }}
                       />
                     ) : (
-                      <ThumbnailLoader
-                        photoId={photo.id}
-                        onLoaded={handleThumbnailLoaded}
-                        style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }}
-                      />
+                      <div style={thumbnailPlaceholderStyle}>
+                        {thumbnailUrls[photo.id] === '' ? 'Unavailable' : 'Loading…'}
+                      </div>
                     )}
                     <span style={{ flex: 1, fontSize: '0.875rem' }}>
                       {photo.caption || (hasLoc ? 'Has location' : 'No location')}
@@ -689,60 +795,19 @@ export function CreateRouteFromPhotos() {
 
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10 }}>
-      {!drawerOpen && (
-        <button
-          ref={floatingButtonRef}
-          type="button"
-          onClick={() => setDrawerOpen(true)}
-          style={floatingButtonStyle}
-          aria-label="Open create route"
-        >
-          Create route
-        </button>
-      )}
-      {drawerOpen && (
-        <>
-          <div
-            role="presentation"
-            aria-hidden="true"
-            style={{ position: 'absolute', inset: 0, zIndex: 201, background: 'rgba(0,0,0,0.3)', pointerEvents: 'auto' }}
-            onClick={() => setDrawerOpen(false)}
-          />
-          <div
-            ref={drawerRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Create route"
-            style={{
-              position: 'absolute',
-              top: drawerTop,
-              left: '0.75rem',
-              right: '0.75rem',
-              bottom: '0.75rem',
-              width: 'min(480px, calc(100vw - 1.5rem))',
-              maxHeight: 'calc(100vh - 6.75rem)',
-              display: 'flex',
-              flexDirection: 'column',
-              background: '#fff',
-              border: '1px solid #e5e7eb',
-              borderRadius: 8,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              pointerEvents: 'auto',
-              zIndex: 202,
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderBottom: '1px solid #e5e7eb' }}>
-              <h2 style={{ margin: 0, fontSize: '1rem' }}>Create route</h2>
-              <button type="button" onClick={() => setDrawerOpen(false)} aria-label="Close">×</button>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '1rem' }}>
-              <h1 data-testid="create-route-from-photos-title" style={{ fontSize: '1.25rem', margin: '0 0 0.5rem' }}>Create route from photos</h1>
-              {createContent}
-            </div>
-          </div>
-        </>
-      )}
+      <BottomDrawer
+        open
+        onClose={() => navigate('/browse')}
+        title="Create route"
+        initialExpanded={!!(location.state && typeof location.state === 'object' && 'openDrawer' in location.state && (location.state as { openDrawer?: boolean }).openDrawer)}
+      >
+        <div style={{ padding: '0 1rem 1rem' }}>
+          <h1 data-testid="create-route-from-photos-title" style={{ fontSize: '1.25rem', margin: '0 0 0.5rem' }}>
+            Create route from photos
+          </h1>
+          {createContent}
+        </div>
+      </BottomDrawer>
       {placePhotoModal}
     </div>
   );

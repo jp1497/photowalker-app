@@ -118,7 +118,7 @@ describe('ExploreRoutesPanel', () => {
     expect(mockNavigate.mock.calls[0][0]).toMatch(/\/login\?redirect=/);
   });
 
-  it('Create route button navigates to /routes/create when authenticated', async () => {
+  it('Create route button closes panel and navigates to /routes/create when authenticated', async () => {
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'u1', email: 'a@b.co', name: 'User', avatar_url: null, created_at: '' },
       isAuthenticated: true,
@@ -126,10 +126,14 @@ describe('ExploreRoutesPanel', () => {
       login: vi.fn(),
       logout: vi.fn(),
     });
-    render(<ExploreRoutesPanel open onClose={() => {}} />);
+    const onClose = vi.fn();
+    render(<ExploreRoutesPanel open onClose={onClose} />);
     mockNavigate.mockClear();
     await userEvent.click(screen.getByRole('button', { name: /create route/i }));
-    expect(mockNavigate).toHaveBeenCalledWith('/routes/create');
+    expect(onClose).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/routes/create', {
+      state: { openDrawer: true, preserveViewport: true },
+    });
   });
 
   it('uses rem for width (no desktop-only fixed px assumption)', async () => {

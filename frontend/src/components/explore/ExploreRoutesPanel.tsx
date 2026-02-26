@@ -221,11 +221,12 @@ export function ExploreRoutesPanel({
 
   const handleCreateRoute = useCallback(() => {
     if (isAuthenticated) {
-      navigate('/routes/create');
+      onClose();
+      navigate('/routes/create', { state: { openDrawer: true, preserveViewport: true } });
     } else {
       navigate('/login?redirect=' + encodeURIComponent('/routes/create'));
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, onClose]);
 
   if (!open) return null;
 

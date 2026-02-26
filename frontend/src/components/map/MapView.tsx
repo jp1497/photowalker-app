@@ -10,11 +10,13 @@ const DEFAULT_ZOOM = 12;
 export interface MapViewProps {
   center?: [number, number];
   zoom?: number;
+  /** When true, do not apply center/zoom (keeps current map viewport). Used when navigating with preserveViewport in state. */
+  preserveViewport?: boolean;
   style?: CSSProperties;
   onMapReady?: (map: maplibregl.Map) => void;
 }
 
-export function MapView({ center = DEFAULT_CENTER, zoom = DEFAULT_ZOOM, style, onMapReady }: MapViewProps) {
+export function MapView({ center = DEFAULT_CENTER, zoom = DEFAULT_ZOOM, preserveViewport, style, onMapReady }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const initialCenterRef = useRef(center);
@@ -69,10 +71,11 @@ export function MapView({ center = DEFAULT_CENTER, zoom = DEFAULT_ZOOM, style, o
   const centerLng = center[0];
   const centerLat = center[1];
   useEffect(() => {
+    if (preserveViewport) return;
     const map = mapRef.current;
     if (!map || !map.getCenter) return;
     map.jumpTo({ center: [centerLng, centerLat], zoom });
-  }, [centerLng, centerLat, zoom]);
+  }, [centerLng, centerLat, zoom, preserveViewport]);
 
   return <div ref={containerRef} className="map-container" style={{ width: '100%', height: '100%', ...style }} />;
 }
