@@ -311,7 +311,7 @@ export function RouteView({ route, photos, selectedPhotoId, onSelectPhoto, prese
       }
       mapRef.current = null;
     };
-  }, []);
+  }, [contentOnly]);
 
   const pointCount = coordinates.length;
   const distanceKm = (route.distance_meters / 1000).toFixed(2);

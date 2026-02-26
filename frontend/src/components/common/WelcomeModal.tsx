@@ -3,24 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { OverlayCard } from './OverlayCard';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
-
-const SESSION_STORAGE_KEY = 'photowalker_welcome_dismissed';
-
-export function getWelcomeDismissed(): boolean {
-  try {
-    return sessionStorage.getItem(SESSION_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-export function setWelcomeDismissed(): void {
-  try {
-    sessionStorage.setItem(SESSION_STORAGE_KEY, '1');
-  } catch {
-    // ignore
-  }
-}
+import { setWelcomeDismissed } from './welcomeStorage';
 
 export interface WelcomeModalProps {
   open: boolean;

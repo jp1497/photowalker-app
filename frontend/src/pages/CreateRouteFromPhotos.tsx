@@ -9,7 +9,6 @@ import {
   createDefaultPinImageData,
   imageToPinImageData,
   MAP_PIN_RASTER_SIZE,
-  PIN_BORDER_WIDTH,
   PIN_ICON_SIZE,
 } from '../components/map/pinImageUtils';
 import { BottomDrawer } from '../components/common/BottomDrawer';
@@ -17,7 +16,6 @@ import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { useMapContext } from '../contexts/MapContext';
 import { uploadPhoto, updatePhoto, fetchPhotoImageBlob } from '../api/photos';
-import { apiClient } from '../api/client';
 import { createRouteFromPhotos } from '../api/routes';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { usePreferredMapCenter } from '../hooks/usePreferredMapCenter';

@@ -23,7 +23,8 @@ import {
   MAP_PIN_RASTER_SIZE,
   PIN_ICON_SIZE,
 } from '../components/map/pinImageUtils';
-import { getWelcomeDismissed, WelcomeModal } from '../components/common/WelcomeModal';
+import { getWelcomeDismissed } from '../components/common/welcomeStorage';
+import { WelcomeModal } from '../components/common/WelcomeModal';
 import { PhotoGallery } from '../components/photos/PhotoGallery';
 import { useAuth } from '../hooks/useAuth';
 import { useFocusTrap } from '../hooks/useFocusTrap';

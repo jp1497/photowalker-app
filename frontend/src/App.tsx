@@ -39,10 +39,12 @@ function MapShellLayout() {
     };
   }, []);
 
-  /** Sync highlight from URL when on /browse (e.g. initial load or back/forward). */
+  /** Sync highlight from URL when on /browse (e.g. initial load or back/forward). Defer setState to avoid synchronous setState in effect. */
   useEffect(() => {
     if (pathname !== '/browse') return;
-    setHighlightedRouteSlug(searchParams.get('route') || null);
+    const slug = searchParams.get('route') || null;
+    const id = setTimeout(() => setHighlightedRouteSlug(slug), 0);
+    return () => clearTimeout(id);
   }, [pathname, searchParams]);
 
   /** Set highlighted route (panel hover/select). Update state immediately so HighlightedRouteLayer and fade respond; keep URL in sync for /browse?route=:slug. */
@@ -69,11 +71,15 @@ function MapShellLayout() {
     [navigate, routesPanel]
   );
 
+  /** When panel closes, clear highlight and URL. Defer setState to avoid synchronous setState in effect. */
   useEffect(() => {
     if (!routesPanel?.routesPanelOpen) {
-      setHighlightedRouteSlug(null);
-      setHighlightedLayerReady(false);
+      const id = setTimeout(() => {
+        setHighlightedRouteSlug(null);
+        setHighlightedLayerReady(false);
+      }, 0);
       if (pathname === '/browse') setSearchParams({}, { replace: true });
+      return () => clearTimeout(id);
     }
   }, [routesPanel?.routesPanelOpen, pathname, setSearchParams]);
 

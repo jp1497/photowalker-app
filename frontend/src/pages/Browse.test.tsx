@@ -8,7 +8,7 @@ import { Browse } from './Browse';
 import * as routesApi from '../api/routes';
 import * as photosApi from '../api/photos';
 import * as useAuth from '../hooks/useAuth';
-import * as WelcomeModalModule from '../components/common/WelcomeModal';
+import * as WelcomeStorage from '../components/common/welcomeStorage';
 
 vi.mock('../api/routes');
 vi.mock('../api/photos');
@@ -313,7 +313,7 @@ describe('Browse', () => {
         login: vi.fn(),
         logout: vi.fn(),
       });
-      vi.spyOn(WelcomeModalModule, 'getWelcomeDismissed').mockReturnValue(false);
+      vi.spyOn(WelcomeStorage, 'getWelcomeDismissed').mockReturnValue(false);
 
       render(
         <MemoryRouter>
@@ -335,7 +335,7 @@ describe('Browse', () => {
         login: vi.fn(),
         logout: vi.fn(),
       });
-      vi.spyOn(WelcomeModalModule, 'getWelcomeDismissed').mockReturnValue(true);
+      vi.spyOn(WelcomeStorage, 'getWelcomeDismissed').mockReturnValue(true);
 
       render(
         <MemoryRouter>
@@ -354,7 +354,7 @@ describe('Browse', () => {
         login: vi.fn(),
         logout: vi.fn(),
       });
-      vi.spyOn(WelcomeModalModule, 'getWelcomeDismissed').mockReturnValue(false);
+      vi.spyOn(WelcomeStorage, 'getWelcomeDismissed').mockReturnValue(false);
 
       render(
         <MemoryRouter>
@@ -377,7 +377,7 @@ describe('Browse', () => {
         login: vi.fn(),
         logout: vi.fn(),
       });
-      vi.spyOn(WelcomeModalModule, 'getWelcomeDismissed').mockReturnValue(false);
+      vi.spyOn(WelcomeStorage, 'getWelcomeDismissed').mockReturnValue(false);
 
       render(
         <MemoryRouter>

@@ -114,7 +114,10 @@ export function BottomDrawer({
   const drawerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (open && initialExpanded) setExpanded(true);
+    if (open && initialExpanded) {
+      const id = setTimeout(() => setExpanded(true), 0);
+      return () => clearTimeout(id);
+    }
   }, [open, initialExpanded]);
 
   useFocusTrap(drawerRef, {

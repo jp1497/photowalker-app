@@ -63,7 +63,10 @@ export function HighlightedRouteLayer({
   const zoomHandlerRef = useRef<(() => void) | null>(null);
   const objectUrlsRef = useRef<Record<string, string>>({});
   const imageIdsRef = useRef<string[]>([]);
-  currentSlugRef.current = highlightedRouteSlug;
+
+  useEffect(() => {
+    currentSlugRef.current = highlightedRouteSlug;
+  }, [highlightedRouteSlug]);
 
   const removeLayer = useCallback(
     (map: MapLibreMap) => {
@@ -244,7 +247,7 @@ export function HighlightedRouteLayer({
       cancelledRef.current = true;
       if (mapContext.map) cleanup(mapContext.map);
     };
-  }, [mapContext, highlightedRouteSlug, removeLayer]);
+  }, [mapContext, highlightedRouteSlug, removeLayer, onHighlightedLayerReadyChange]);
 
   return null;
 }
