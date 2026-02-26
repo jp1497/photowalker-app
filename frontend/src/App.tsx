@@ -61,11 +61,11 @@ function MapShellLayout() {
     [pathname, setSearchParams]
   );
 
-  /** Open route in drawer: close routes panel, navigate to /routes/:slug. Bottom drawer opens expanded on RouteDetail. */
+  /** Open route in drawer: close routes panel, navigate to /routes/:slug. Preserve map viewport for seamless transition. */
   const handleRouteSelect = useCallback(
     (routeSlug: string) => {
       routesPanel?.setRoutesPanelOpen(false);
-      navigate(`/routes/${routeSlug}`, { state: { openDrawer: true } });
+      navigate(`/routes/${routeSlug}`, { state: { openDrawer: true, preserveViewport: true } });
     },
     [navigate, routesPanel]
   );

@@ -738,7 +738,7 @@ export function Browse() {
       mapApi.on('click', UNCLUSTERED_LAYER_ID, (e) => {
         const feature = e.features?.[0];
         const slug = (feature?.properties as { slug?: string })?.slug;
-        if (slug) navigate(`/routes/${slug}`);
+        if (slug) navigate(`/routes/${slug}`, { state: { openDrawer: true, preserveViewport: true } });
       });
     } else {
       (mapApi.getSource(ROUTES_SOURCE_ID) as maplibregl.GeoJSONSource).setData(geojson);
@@ -820,7 +820,7 @@ export function Browse() {
 
   const handleListRouteClick = useCallback((slug: string) => {
     setListOverlayOpen(false);
-    navigate(`/routes/${slug}`);
+    navigate(`/routes/${slug}`, { state: { openDrawer: true, preserveViewport: true } });
   }, [navigate]);
 
   const showWelcomeModal = !isAuthenticated && !welcomeDismissed;
@@ -854,7 +854,7 @@ export function Browse() {
             onOpenRoute: selectedPhotoForLightbox.routeSlugs?.length
               ? (slug) => {
                   setSelectedPhotoForLightbox(null);
-                  navigate(`/routes/${slug}`);
+                  navigate(`/routes/${slug}`, { state: { openDrawer: true, preserveViewport: true } });
                 }
               : undefined,
           }}
