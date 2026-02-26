@@ -15,7 +15,6 @@ import { AuthCallback } from './pages/AuthCallback';
 import { Browse } from './pages/Browse';
 import { CreateRouteFromPhotos } from './pages/CreateRouteFromPhotos';
 import { Login } from './pages/Login';
-import { MyRoutes } from './pages/MyRoutes';
 import { NotFound } from './pages/NotFound';
 import { RouteDetail } from './pages/RouteDetail';
 import { Settings } from './pages/Settings';
@@ -78,17 +77,15 @@ function MapShellLayout() {
     }
   }, [routesPanel?.routesPanelOpen, pathname, setSearchParams]);
 
-  /** browse-photos = /browse (photo pins in bbox). browse = /routes/me (My Routes). */
+  /** browse-photos = /browse (photo pins in bbox). /routes/me removed (Phase 7); My routes is panel filter only. */
   const mode =
     pathname === '/browse'
       ? 'browse-photos'
       : pathname === '/routes/create'
         ? 'create'
-        : pathname === '/routes/me'
-          ? 'browse'
-          : pathname.startsWith('/routes/') && slug
-            ? 'detail'
-            : 'home';
+        : pathname.startsWith('/routes/') && slug
+          ? 'detail'
+          : 'home';
 
   return (
     <HighlightedRouteContext.Provider value={{ highlightedRouteSlug, highlightedLayerReady }}>
@@ -135,14 +132,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/browse" element={<Browse />} />
           <Route path="/settings" element={<Settings />} />
-          <Route
-            path="/routes/me"
-            element={
-              <ProtectedRoute>
-                <MyRoutes />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/routes/me" element={<Navigate to="/browse" replace />} />
           <Route
             path="/routes/create"
             element={

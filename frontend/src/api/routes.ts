@@ -9,16 +9,6 @@ import type {
   RouteFromPhotosPayload,
 } from '../types/route';
 
-/** Response from GET /v1/routes/me */
-export interface MyRoutesResponse {
-  routes: Route[];
-}
-
-export async function getMyRoutes(): Promise<MyRoutesResponse> {
-  const { data } = await apiClient.get<MyRoutesResponse>('/v1/routes/me');
-  return data;
-}
-
 export async function createRoute(payload: RouteCreatePayload): Promise<{ route: Route }> {
   const { data } = await apiClient.post<{ route: Route }>('/v1/routes', payload);
   return data;
