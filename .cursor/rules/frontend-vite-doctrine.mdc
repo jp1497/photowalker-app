@@ -16,10 +16,15 @@ alwaysApply: false
 - Before calling a library method (e.g. get vs getAll), **verify the actual API** from the package's type definitions (`node_modules/<pkg>/index.d.ts`) or official docs. Assuming the wrong method leads to silent wrong data (null/undefined) and confusing UX (e.g. "draw a route" validation failing despite a visible line).
 - Prefer reading types over docs when they exist; types are the contract the runtime will follow.
 
+## Consistency with Existing Views
+
+- When a **new flow or page** should look and behave like an **existing one** (e.g. create-route map like route detail), **reuse the same components and patterns** (map: same source/layer setup, symbol layer, pin images; thumbnails: same API and parent-level cache). Do not reimplement with different primitives (e.g. Markers instead of GeoJSON + symbol layer, or a custom thumbnail loader instead of the shared fetch + cache). Reuse keeps behavior and visuals consistent and avoids "display exactly as route detail" rework later.
+
 ## Map + Control Teardown Order
 
 - When a map and a map control (e.g. MapboxDraw, custom overlay) live in **sibling components**, React effect cleanup order between them is **undefined**. The map container may run `map.remove()` before the control runs `map.removeControl(control)`; the control's `onRemove` can then run against an already-destroyed map and throw (e.g. "Cannot read properties of null (reading 'off')").
 - **Defensive teardown:** Wrap control cleanup (listener removal, `removeControl`) in try/catch. Clear your own refs after the try block so cleanup remains idempotent. Alternatively, coordinate so the control is removed before the map is destroyed (e.g. single owner that removes control then map).
+- When a component adds **custom layers, sources, or map images** (e.g. route line, pin images), **remove them in effect cleanup** (removeLayer, removeSource, removeImage for each added image id). Otherwise the map can show stale data when navigating away or when the same map is reused by another view.
 
 ## Map Basemap and Style Loading
 
