@@ -1,4 +1,9 @@
-/** Full-viewport map shell: single MapView, owns lifecycle. Children use MapContext for layers. */
+/**
+ * Full-viewport map shell: single MapView, owns lifecycle. Children use MapContext for layers.
+ * Map mode coordination (PRD v6 Phase 8): only one of browse-photos, detail, or create is active
+ * per route (Browse vs RouteDetail vs CreateRouteFromPhotos). HighlightedRouteLayer uses distinct
+ * source/layer IDs (highlighted-route-*). Each child tears down its layers in effect cleanup.
+ */
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { MapView } from './MapView';

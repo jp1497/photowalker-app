@@ -92,6 +92,7 @@ export function RouteList({
               gap: '0.75rem',
               padding: '0.75rem',
               marginBottom: '0.5rem',
+              minHeight: 44,
               border: isHighlighted ? '2px solid #2563eb' : '1px solid #e5e7eb',
               borderRadius: '6px',
               cursor: 'pointer',
@@ -100,6 +101,7 @@ export function RouteList({
             onClick={() => handleRouteClick(route.slug)}
             onMouseEnter={() => onRouteMouseEnter?.(route)}
             onMouseLeave={() => onRouteMouseLeave?.()}
+            onPointerDown={() => onRouteMouseEnter?.(route)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();

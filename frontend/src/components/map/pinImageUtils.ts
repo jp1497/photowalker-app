@@ -1,5 +1,6 @@
 /** Shared pin image helpers for map symbol layers (route detail photos, browse routes). */
 
+/** Base pin size; 44px meets WCAG minimum touch target (FR-U7). */
 export const PIN_ICON_SIZE = 44;
 /** Raster size for high-quality map pins. Larger than PIN_ICON_SIZE so the map scales a bigger bitmap when zooming. */
 export const MAP_PIN_RASTER_SIZE = 256;
