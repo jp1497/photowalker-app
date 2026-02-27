@@ -143,12 +143,12 @@ export function PhotoGallery({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 1001,
             pointerEvents: 'auto',
           }}
           onClick={closeModal}
         >
-          <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: '0.5rem' }}>
+          <div style={{ position: 'absolute', top: 16, right: '4rem', display: 'flex', gap: '0.5rem' }}>
             {isOwner && onEditLocation && (
               <button
                 type="button"
