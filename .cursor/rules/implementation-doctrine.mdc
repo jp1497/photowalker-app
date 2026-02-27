@@ -70,6 +70,18 @@ When an automated export script (e.g. OpenAPI from FastAPI app) cannot run due t
 - Option B: Document that the script requires full environment and how to run it; provide a static reference that is "good enough" for the current need
 - Document both the automated path (when env allows) and the manual/fallback path
 
+## Destructive Operations and Data Cleanup
+
+- When the user asks to **clean or delete data** and says to **not delete without confirming** (or similar), deliver **discovery only** first: where the data lives, what would be removed, and optional scripts or commands. **Do not perform destructive operations** (DB truncate, file deletion, etc.) until the user explicitly confirms (e.g. "I'm ready to clean" or running a script with a confirmation flag such as `--confirm`). Provide a script that refuses to run without the flag and documents the impact.
+
+## Shell Scripts Loading .env
+
+- Avoid loading `.env` in shell scripts with `export $(grep -v '^#' file | xargs)`: in constrained or sandbox environments this can fail (e.g. `xargs` sysconf errors) or dump the environment. Prefer: `set -a; [ -f file ] && . file 2>/dev/null; set +a` (source the file), or read and export only the variables the script needs (e.g. `DATABASE_URL`) line-by-line. This keeps scripts quiet and portable.
+
+## Test Data and Fixture Visibility
+
+- When "hiding" test fixtures or test data from normal users, distinguish **(a)** the fixture **file** not being served in the app (e.g. e2e/fixtures not in build or public assets) from **(b)** **runtime data** created when tests run (e.g. E2E creating routes/photos in the shared DB), which can still appear in the app (browse, lists). Document both. For (b), recommend a dedicated test database for E2E or a post-test cleanup step so test-created data does not appear to normal users.
+
 ## Scripts That Import the Application
 
 Scripts that `import app` (or equivalent) trigger full app bootstrap: Settings validation, DB drivers, OAuth config. They require either:

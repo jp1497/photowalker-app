@@ -19,11 +19,15 @@ cd "$REPO_ROOT"
 
 echo "Cleaning development data (--confirm passed)..."
 
-# 1. Database: truncate in dependency order
+# 1. Database: truncate in dependency order (load only DATABASE_URL from .env; avoid xargs env dump)
+DATABASE_URL="postgresql+asyncpg://photowalker:photowalker@localhost:5432/photowalker"
 if [ -f "backend/.env" ]; then
-  export $(grep -v '^#' backend/.env | xargs)
+  while IFS= read -r line; do
+    case "$line" in
+      DATABASE_URL=*) v="${line#*=}"; DATABASE_URL="${v%\"}"; DATABASE_URL="${DATABASE_URL#\"}";;
+    esac
+  done < <(grep -v '^#' backend/.env | grep -v '^[[:space:]]*$')
 fi
-DATABASE_URL="${DATABASE_URL:-postgresql+asyncpg://photowalker:photowalker@localhost:5432/photowalker}"
 
 # Use psql if available (sync); otherwise skip DB and warn
 if command -v psql >/dev/null 2>&1; then

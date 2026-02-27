@@ -70,6 +70,7 @@ alwaysApply: false
 ## Layout: Dense Chrome and Button Visibility
 
 - When placing **multiple controls** in the same corner (e.g. top-right), avoid a single row if it causes overlap or one control to be hidden by others (e.g. account icon, other chrome). Use vertical stacking (separate rows) or sufficient spacing so each control is visible and clickable.
+- When an **overlay** (modal, lightbox) has its own controls in the same corner as **fixed chrome** (e.g. account button), position the overlay’s control strip with an offset so it sits clear of the chrome (e.g. `right: 4rem` so buttons are left of the fixed icon), and set the overlay’s `z-index` above the chrome so the overlay and its controls stack on top when open.
 
 ## Expected UI or Changes Not Visible
 
