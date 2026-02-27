@@ -15,7 +15,13 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import BboxTooLargeError, PhotoForbiddenError, PhotoNotFoundError
 from app.db.dependencies import get_db
 from app.models.user import User
-from app.schemas.photo import PhotoBrowseItem, PhotoBrowseRouteRef, PhotoBrowseUser, PhotoResponse, PhotoUpdate
+from app.schemas.photo import (
+    PhotoBrowseItem,
+    PhotoBrowseRouteRef,
+    PhotoBrowseUser,
+    PhotoResponse,
+    PhotoUpdate,
+)
 from app.services import photo_service
 from app.storage.s3 import get_file_content, get_presigned_url
 
