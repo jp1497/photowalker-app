@@ -1,17 +1,18 @@
-"""Photo upload, EXIF, storage, and CRUD. PRD v2 - FR3, Step 4.2."""
+"""Photo upload, EXIF, storage, and CRUD. PRD v2 - FR3, Step 4.2; PRD v6 - photos-in-bbox."""
 from __future__ import annotations
 
 import uuid
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from geoalchemy2.elements import WKTElement
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql import text
 
 from app.core.config import Settings
-from app.core.exceptions import PhotoForbiddenError, PhotoNotFoundError
+from app.core.exceptions import BboxTooLargeError, PhotoForbiddenError, PhotoNotFoundError
 from app.models.photo import Photo
 from app.models.route import Route
 from app.models.route_photo import RoutePhoto
@@ -22,6 +23,12 @@ from app.workers.thumbnail_job import enqueue_thumbnail_job
 MAX_PHOTOS_PER_ROUTE = 50
 CAPTION_MAX_LEN = 500
 JPEG_HEADER = b"\xff\xd8\xff"
+
+# Browse photos by bbox: same limit as discovery (GET /v1/routes). PRD v6 - Step 0.1.
+MAX_BBOX_AREA_M2 = 200_000_000  # 200 km²
+DEFAULT_PAGE = 1
+DEFAULT_PER_PAGE = 20
+MAX_PER_PAGE = 50
 
 
 async def upload_photo(
@@ -123,6 +130,83 @@ async def get_photo_by_id_with_routes(db: AsyncSession, photo_id: UUID) -> Optio
         .options(selectinload(Photo.route_photos).selectinload(RoutePhoto.route))
     )
     return r.scalar_one_or_none()
+
+
+async def _bbox_area_m2(db: AsyncSession, min_lon: float, min_lat: float, max_lon: float, max_lat: float) -> float:
+    """Return area of bbox in m² using PostGIS geography. Same as discovery_service."""
+    r = await db.execute(
+        text("SELECT ST_Area(ST_MakeEnvelope(:a, :b, :c, :d, 4326)::geography)"),
+        {"a": min_lon, "b": min_lat, "c": max_lon, "d": max_lat},
+    )
+    row = r.scalar_one_or_none()
+    return float(row) if row is not None else 0.0
+
+
+async def browse_photos(
+    db: AsyncSession,
+    *,
+    bbox: tuple[float, float, float, float],
+    page: int = DEFAULT_PAGE,
+    per_page: int = DEFAULT_PER_PAGE,
+) -> Tuple[List[Photo], int, int, int]:
+    """Return photos with location inside bbox that appear on at least one public non-draft route.
+    PRD v6 - Step 0.1. bbox: (min_lon, min_lat, max_lon, max_lat). Rejected if area > 200 km².
+    Returns (photos, total, page, per_page). Photos have user and route_photos.route loaded."""
+    if per_page > MAX_PER_PAGE:
+        per_page = MAX_PER_PAGE
+    if per_page < 1:
+        per_page = DEFAULT_PER_PAGE
+    if page < 1:
+        page = DEFAULT_PAGE
+
+    min_lon, min_lat, max_lon, max_lat = bbox
+    if min_lon > max_lon or min_lat > max_lat:
+        return [], 0, page, per_page
+    area_m2 = await _bbox_area_m2(db, min_lon, min_lat, max_lon, max_lat)
+    if area_m2 > MAX_BBOX_AREA_M2:
+        raise BboxTooLargeError()
+
+    envelope = func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+    # Photos that have location in bbox and are on at least one public non-draft route
+    base = (
+        select(Photo)
+        .join(RoutePhoto, RoutePhoto.photo_id == Photo.id)
+        .join(Route, RoutePhoto.route_id == Route.id)
+        .where(
+            Route.is_public.is_(True),
+            Route.is_draft.is_(False),
+            Photo.location.isnot(None),
+            func.ST_Intersects(Photo.location, envelope),
+        )
+        .distinct()
+    )
+    count_stmt = (
+        select(func.count(func.distinct(Photo.id)))
+        .join(RoutePhoto, RoutePhoto.photo_id == Photo.id)
+        .join(Route, RoutePhoto.route_id == Route.id)
+        .where(
+            Route.is_public.is_(True),
+            Route.is_draft.is_(False),
+            Photo.location.isnot(None),
+            func.ST_Intersects(Photo.location, envelope),
+        )
+    )
+    total_result = await db.execute(count_stmt)
+    total = total_result.scalar_one() or 0
+
+    offset = (page - 1) * per_page
+    base = (
+        base.order_by(Photo.created_at.desc())
+        .offset(offset)
+        .limit(per_page)
+        .options(
+            selectinload(Photo.user),
+            selectinload(Photo.route_photos).selectinload(RoutePhoto.route),
+        )
+    )
+    r = await db.execute(base)
+    photos = list(r.unique().scalars().all())
+    return (photos, total, page, per_page)
 
 
 def _validate_location_coords(location_dict: dict) -> tuple[float, float]:

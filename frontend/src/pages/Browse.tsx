@@ -1,10 +1,11 @@
-/** Browse public routes: map view (bbox fetch) + list view (paginated), filter by tags. */
+/** Browse: map with photo pins (bbox fetch) or legacy list view. PRD v6 Step 3.1: browse-photos mode. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import maplibregl from 'maplibre-gl';
 import { getBrowseRoutes } from '../api/routes';
-import { fetchPhotoImageBlob } from '../api/photos';
+import { fetchPhotoImageBlob, getPhotosInBbox } from '../api/photos';
+import type { PhotoBrowseItem } from '../types/photo';
 import {
   CLUSTER_MAX_ZOOM,
   CLUSTER_MIN_POINTS,
@@ -13,11 +14,19 @@ import {
 import { MapPanel } from '../components/map/MapPanel';
 import { MapView } from '../components/map/MapView';
 import { RouteList } from '../components/routes/RouteList';
+import { useHighlightedRoute } from '../contexts/HighlightedRouteContext';
 import { useMapContext } from '../contexts/MapContext';
 import {
+  browsePinIconSizeAtZoom,
   createDefaultPinImageData,
   imageToPinImageData,
+  MAP_PIN_RASTER_SIZE,
+  PIN_ICON_SIZE,
 } from '../components/map/pinImageUtils';
+import { getWelcomeDismissed } from '../components/common/welcomeStorage';
+import { WelcomeModal } from '../components/common/WelcomeModal';
+import { PhotoGallery } from '../components/photos/PhotoGallery';
+import { useAuth } from '../hooks/useAuth';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { usePreferredMapCenter } from '../hooks/usePreferredMapCenter';
 import type { Route } from '../types/route';
@@ -27,6 +36,10 @@ type ViewMode = 'map' | 'list';
 const ROUTES_SOURCE_ID = 'browse-routes';
 const CLUSTER_LAYER_ID = 'browse-routes-clusters';
 const UNCLUSTERED_LAYER_ID = 'browse-routes-unclustered';
+const BROWSE_PHOTOS_SOURCE_ID = 'browse-photos-source';
+const BROWSE_PHOTOS_LAYER_ID = 'browse-photos-layer';
+/** When true, only show pins for photos that have a valid thumbnail (hide default-pin-only). Toggle for UX filter later. */
+const BROWSE_PHOTOS_HIDE_PINS_WITHOUT_THUMBNAIL = true;
 const CLUSTER_STACK_SIZE = 44;
 const CLUSTER_STACK_OFFSET = 5;
 const CLUSTER_STACK_MAX_IMAGES = 5;
@@ -84,6 +97,21 @@ function buildRoutesGeoJSON(routes: Route[]): GeoJSON.FeatureCollection<GeoJSON.
   return { type: 'FeatureCollection', features };
 }
 
+function buildPhotosGeoJSON(photos: PhotoBrowseItem[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
+  const features: GeoJSON.Feature<GeoJSON.Point>[] = [];
+  for (const p of photos) {
+    const loc = p.location;
+    if (!loc || loc.type !== 'Point' || !loc.coordinates?.length) continue;
+    const [lng, lat] = loc.coordinates;
+    features.push({
+      type: 'Feature',
+      properties: { photoId: p.id, caption: p.caption ?? '', userName: p.user.name },
+      geometry: { type: 'Point', coordinates: [lng, lat] },
+    });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
 /** Stacked thumbnails for a route cluster; first route on top. */
 function createRouteClusterStackElement(
   entries: { slug: string; firstPhotoId: string | null }[],
@@ -133,27 +161,40 @@ function createRouteClusterStackElement(
 export function Browse() {
   const navigate = useNavigate();
   const mapContext = useMapContext();
+  const { isAuthenticated } = useAuth();
   const { center: mapCenter, zoom: mapZoom } = usePreferredMapCenter();
+  const [welcomeDismissed, setWelcomeDismissed] = useState(() => getWelcomeDismissed());
   const [viewMode, setViewMode] = useState<ViewMode>('map');
   const [routes, setRoutes] = useState<Route[]>([]);
   const [pagination, setPagination] = useState({ page: 1, per_page: 20, total: 0 });
   const [loading, setLoading] = useState(false);
   const [tagsFilter, setTagsFilter] = useState('');
   const [mapBbox, setMapBbox] = useState<string | null>(null);
+  /** Photos in viewport for browse-photos mode (GET /v1/photos?bbox=). PRD v6 Step 3.1. */
+  const [browsePhotos, setBrowsePhotos] = useState<PhotoBrowseItem[]>([]);
+  const browsePhotosRef = useRef<PhotoBrowseItem[]>([]);
+  const [browsePhotoThumbnailUrls, setBrowsePhotoThumbnailUrls] = useState<Record<string, string>>({});
+  const browsePhotoThumbnailUrlsRef = useRef<Record<string, string>>({});
+  /** Ref for focus return when closing photo lightbox (Step 3.2). */
+  const mapFocusRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   const clusterMarkersRef = useRef<maplibregl.Marker[]>([]);
   const clusterUpdateRunRef = useRef(0);
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const thumbnailUrlsRef = useRef<Record<string, string>>({});
   const listPage = useRef(1);
-  const [filtersOverlayOpen, setFiltersOverlayOpen] = useState(false);
   const [listOverlayOpen, setListOverlayOpen] = useState(true);
-  const filtersButtonRef = useRef<HTMLButtonElement>(null);
+  /** Photo selected for lightbox (e.g. from pin click in Phase 3). Step 2.3: reuse PhotoGallery for single-photo view. */
+  const [selectedPhotoForLightbox, setSelectedPhotoForLightbox] = useState<{
+    id: string;
+    caption: string | null;
+    userName?: string;
+    routeSlugs?: { slug: string; title?: string }[];
+  } | null>(null);
   const routesButtonRef = useRef<HTMLButtonElement>(null);
-  const filtersOverlayRef = useRef<HTMLDivElement>(null);
   const listOverlayRef = useRef<HTMLDivElement>(null);
 
-  useFocusTrap(filtersOverlayRef, { active: filtersOverlayOpen, returnFocusRef: filtersButtonRef });
   useFocusTrap(listOverlayRef, { active: listOverlayOpen, returnFocusRef: routesButtonRef });
 
   const routesWithPhoto = useMemo(
@@ -193,6 +234,45 @@ export function Browse() {
     };
   }, [routesWithPhoto]);
 
+  /** Photos to show on map: all, or only those with valid thumbnail when BROWSE_PHOTOS_HIDE_PINS_WITHOUT_THUMBNAIL. */
+  const photosToShowOnMap = useMemo(() => {
+    if (!BROWSE_PHOTOS_HIDE_PINS_WITHOUT_THUMBNAIL) return browsePhotos;
+    return browsePhotos.filter((p) => !!browsePhotoThumbnailUrls[p.id]);
+  }, [browsePhotos, browsePhotoThumbnailUrls]);
+
+  /** Fetch thumbnail blobs for browse-photos pins; object URLs keyed by photo id. */
+  useEffect(() => {
+    if (browsePhotos.length === 0) return;
+    let cancelled = false;
+    const seen = new Set<string>();
+    browsePhotos.forEach((p) => {
+      const id = p.id;
+      if (seen.has(id)) return;
+      seen.add(id);
+      fetchPhotoImageBlob(id, 'thumbnail')
+        .then((blob) => {
+          if (cancelled) return;
+          const url = URL.createObjectURL(blob);
+          setBrowsePhotoThumbnailUrls((prev) => {
+            const next = { ...prev, [id]: url };
+            browsePhotoThumbnailUrlsRef.current = next;
+            return next;
+          });
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setBrowsePhotoThumbnailUrls((prev) => ({ ...prev, [id]: '' }));
+        });
+    });
+    return () => {
+      cancelled = true;
+      Object.values(browsePhotoThumbnailUrlsRef.current).forEach((u) => {
+        if (u) URL.revokeObjectURL(u);
+      });
+      browsePhotoThumbnailUrlsRef.current = {};
+    };
+  }, [browsePhotos]);
+
   const fetchList = useCallback(() => {
     setLoading(true);
     getBrowseRoutes({
@@ -213,6 +293,31 @@ export function Browse() {
   }, [tagsFilter]);
 
   const [bboxTooLarge, setBboxTooLarge] = useState(false);
+
+  const fetchPhotosInBbox = useCallback((bbox: string) => {
+    setLoading(true);
+    setBboxTooLarge(false);
+    getPhotosInBbox(bbox, 1, 50)
+      .then((res) => {
+        setBrowsePhotos(res.photos);
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err &&
+          typeof err === 'object' &&
+          'response' in err &&
+          (err as { response?: { data?: { detail?: { message?: string } } } }).response?.data?.detail?.message;
+        const isBboxTooLarge =
+          (err as { response?: { status?: number } })?.response?.status === 400 &&
+          (typeof msg === 'string' && msg.toLowerCase().includes('bounding box'));
+        if (isBboxTooLarge) {
+          setBboxTooLarge(true);
+        } else {
+          setBrowsePhotos([]);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const fetchMap = useCallback((bbox: string) => {
     setLoading(true);
@@ -249,10 +354,16 @@ export function Browse() {
 
   const debouncedMapBbox = useDebounce(mapBbox, 400);
 
+  const isShellMap = !!mapContext;
+
   useEffect(() => {
     if (viewMode !== 'map' || !debouncedMapBbox) return;
-    fetchMap(debouncedMapBbox);
-  }, [viewMode, debouncedMapBbox, fetchMap]);
+    if (isShellMap) {
+      fetchPhotosInBbox(debouncedMapBbox);
+    } else {
+      fetchMap(debouncedMapBbox);
+    }
+  }, [viewMode, debouncedMapBbox, isShellMap, fetchPhotosInBbox, fetchMap]);
 
   useEffect(() => {
     if (viewMode === 'list') {
@@ -262,12 +373,12 @@ export function Browse() {
   }, [viewMode, fetchList]);
 
   useEffect(() => {
-    if (!mapContext || !listOverlayOpen) return;
+    if (!mapContext || !listOverlayOpen || isShellMap) return;
     listPage.current = 1;
     const id = setTimeout(() => fetchList(), 0);
     return () => clearTimeout(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch on mount when list open; fetchList would cause refetch on every tags change
-  }, [mapContext, listOverlayOpen]);
+  }, [mapContext, listOverlayOpen, isShellMap]);
 
 
   const addImagesToMap = useCallback((map: MapLibreMap) => {
@@ -301,6 +412,43 @@ export function Browse() {
       }
     });
   }, [routesWithPhoto]);
+
+  /** Add pin images for browse-photos layer: default-pin + one per photo id (thumbnail or fallback). Uses MAP_PIN_RASTER_SIZE so zooming scales a higher-res bitmap. */
+  const addBrowsePhotoImagesToMap = useCallback((map: MapLibreMap) => {
+    const defaultPin = createDefaultPinImageData(MAP_PIN_RASTER_SIZE);
+    if (!map.getStyle()) return;
+    if (!map.hasImage('default-pin')) {
+      map.addImage('default-pin', defaultPin);
+    }
+    browsePhotos.forEach((p) => {
+      const id = p.id;
+      const url = browsePhotoThumbnailUrlsRef.current[id];
+      if (url) {
+        const img = new Image();
+        img.onload = () => {
+          if (!map.getStyle()) return;
+          try {
+            if (map.hasImage(id)) map.removeImage(id);
+            const pinData = imageToPinImageData(img, MAP_PIN_RASTER_SIZE);
+            map.addImage(id, pinData);
+          } catch {
+            /* layer/source may be gone */
+          }
+        };
+        img.src = url;
+      } else {
+        try {
+          if (!map.hasImage(id)) map.addImage(id, defaultPin);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+  }, [browsePhotos]);
+
+  useEffect(() => {
+    browsePhotosRef.current = browsePhotos;
+  }, [browsePhotos]);
 
   const updateClusterMarkers = useCallback((map: MapLibreMap) => {
     clusterMarkersRef.current.forEach((m) => {
@@ -361,6 +509,7 @@ export function Browse() {
 
   const handleMapReady = useCallback((map: MapLibreMap) => {
     mapRef.current = map;
+    setMapReady(true);
     const onMoveEnd = () => {
       const bounds = map.getBounds();
       setMapBbox(boundsToBbox(bounds));
@@ -377,9 +526,133 @@ export function Browse() {
     mapContext.onMapReady(handleMapReady);
   }, [mapContext, handleMapReady]);
 
+  /** Create/teardown browse-photos layer only when show conditions or map readiness change. Keeps layer on map so zoom expression and pins don’t flicker. */
   useEffect(() => {
     const map = mapRef.current;
     const hasMapApi = map && typeof (map as MapLibreMap).getSource === 'function';
+    const shouldShow = isShellMap && viewMode === 'map' && mapReady && hasMapApi;
+    if (!shouldShow) {
+      if (hasMapApi && (map as MapLibreMap).getSource(BROWSE_PHOTOS_SOURCE_ID)) {
+        try {
+          (map as MapLibreMap).removeLayer(BROWSE_PHOTOS_LAYER_ID);
+          (map as MapLibreMap).removeSource(BROWSE_PHOTOS_SOURCE_ID);
+        } catch {
+          /* defensive teardown */
+        }
+      }
+      return;
+    }
+    const mapApi = map as MapLibreMap;
+    let zoomHandler: (() => void) | null = null;
+    if (!mapApi.getSource(BROWSE_PHOTOS_SOURCE_ID)) {
+      mapApi.addSource(BROWSE_PHOTOS_SOURCE_ID, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      const defaultPin = createDefaultPinImageData(MAP_PIN_RASTER_SIZE);
+      if (!mapApi.hasImage('default-pin')) {
+        mapApi.addImage('default-pin', defaultPin);
+      }
+      mapApi.addLayer({
+        id: BROWSE_PHOTOS_LAYER_ID,
+        type: 'symbol',
+        source: BROWSE_PHOTOS_SOURCE_ID,
+        layout: {
+          'icon-image': ['coalesce', ['get', 'photoId'], 'default-pin'],
+          'icon-size': (PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE) * browsePinIconSizeAtZoom(mapApi.getZoom()),
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+        },
+      });
+      zoomHandler = () => {
+        try {
+          if (mapApi.getLayer(BROWSE_PHOTOS_LAYER_ID)) {
+            const zoom = mapApi.getZoom();
+            mapApi.setLayoutProperty(BROWSE_PHOTOS_LAYER_ID, 'icon-size', (PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE) * browsePinIconSizeAtZoom(zoom));
+          }
+        } catch {
+          /* layer/source may be gone */
+        }
+      };
+      zoomHandler();
+      mapApi.on('zoom', zoomHandler);
+      mapApi.on('click', BROWSE_PHOTOS_LAYER_ID, (e) => {
+        const feature = e.features?.[0];
+        const props = feature?.properties as { photoId?: string; caption?: string; userName?: string } | undefined;
+        if (!props?.photoId) return;
+        const photo = browsePhotosRef.current.find((p) => p.id === props.photoId);
+        setSelectedPhotoForLightbox(
+          photo
+            ? {
+                id: photo.id,
+                caption: photo.caption ?? null,
+                userName: photo.user.name,
+                routeSlugs: photo.routes ?? [],
+              }
+            : {
+                id: props.photoId,
+                caption: props.caption ?? null,
+                userName: props.userName,
+                routeSlugs: [],
+              }
+        );
+      });
+    }
+    return () => {
+      if (zoomHandler) {
+        try {
+          mapApi.off('zoom', zoomHandler);
+        } catch {
+          /* ignore */
+        }
+      }
+      try {
+        if (mapApi.getLayer(BROWSE_PHOTOS_LAYER_ID)) mapApi.removeLayer(BROWSE_PHOTOS_LAYER_ID);
+        if (mapApi.getSource(BROWSE_PHOTOS_SOURCE_ID)) mapApi.removeSource(BROWSE_PHOTOS_SOURCE_ID);
+      } catch {
+        /* defensive teardown */
+      }
+    };
+  }, [isShellMap, viewMode, mapReady]);
+
+  /** Update browse-photos source data when photos change. Does not remove the layer, so zoom and pins stay stable. */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!isShellMap || !map?.getSource(BROWSE_PHOTOS_SOURCE_ID)) return;
+    const source = map.getSource(BROWSE_PHOTOS_SOURCE_ID) as maplibregl.GeoJSONSource;
+    if (source?.setData) {
+      source.setData(buildPhotosGeoJSON(photosToShowOnMap));
+    }
+    addBrowsePhotoImagesToMap(map);
+  }, [isShellMap, photosToShowOnMap, addBrowsePhotoImagesToMap]);
+
+  /** When browse-photo thumbnails load, update pin images on the map. */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!isShellMap || !map?.getSource(BROWSE_PHOTOS_SOURCE_ID)) return;
+    addBrowsePhotoImagesToMap(map);
+  }, [isShellMap, browsePhotoThumbnailUrls, addBrowsePhotoImagesToMap]);
+
+  const highlightedRoute = useHighlightedRoute();
+  /** When the highlighted layer is ready, fade the browse layer so the highlighted pins stand out. Fade only when ready to avoid a visible gap. */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!isShellMap || !map?.getLayer(BROWSE_PHOTOS_LAYER_ID)) return;
+    const shouldFade = !!(highlightedRoute?.highlightedRouteSlug && highlightedRoute?.highlightedLayerReady);
+    try {
+      map.setPaintProperty(BROWSE_PHOTOS_LAYER_ID, 'icon-opacity', shouldFade ? 0.2 : 1);
+    } catch {
+      /* ignore */
+    }
+  }, [isShellMap, highlightedRoute?.highlightedRouteSlug, highlightedRoute?.highlightedLayerReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const hasMapApi = map && typeof (map as MapLibreMap).getSource === 'function';
+    if (isShellMap) {
+      /* In browse-photos mode we use photo layer only; do not add route layer. */
+      return;
+    }
     if (viewMode !== 'map' || !hasMapApi) {
       if (hasMapApi && (map as MapLibreMap).getSource(ROUTES_SOURCE_ID)) {
         clusterMarkersRef.current.forEach((m) => {
@@ -466,7 +739,7 @@ export function Browse() {
       mapApi.on('click', UNCLUSTERED_LAYER_ID, (e) => {
         const feature = e.features?.[0];
         const slug = (feature?.properties as { slug?: string })?.slug;
-        if (slug) navigate(`/routes/${slug}`);
+        if (slug) navigate(`/routes/${slug}`, { state: { openDrawer: true, preserveViewport: true } });
       });
     } else {
       (mapApi.getSource(ROUTES_SOURCE_ID) as maplibregl.GeoJSONSource).setData(geojson);
@@ -496,7 +769,7 @@ export function Browse() {
         /* defensive teardown */
       }
     };
-  }, [viewMode, routes, routesWithPhoto, navigate, addImagesToMap, updateClusterMarkers]);
+  }, [isShellMap, viewMode, routes, routesWithPhoto, navigate, addImagesToMap, updateClusterMarkers]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -526,50 +799,32 @@ export function Browse() {
     if (viewMode === 'list' || listOverlayOpen) fetchList();
   }, [viewMode, listOverlayOpen, fetchList, mapBbox, fetchMap]);
 
-  const isShellMap = !!mapContext;
   const overlayMessage =
     (loading || bboxTooLarge)
       ? loading
-        ? 'Loading routes…'
-        : 'Zoom in to see routes in this area'
+        ? (isShellMap ? 'Loading photos…' : 'Loading routes…')
+        : (isShellMap ? 'Zoom in to see photos in this area' : 'Zoom in to see routes in this area')
       : undefined;
 
   useEffect(() => {
     if (!isShellMap) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setFiltersOverlayOpen(false);
-        setListOverlayOpen(false);
-      }
+      if (e.key === 'Escape') setListOverlayOpen(false);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isShellMap]);
 
   useEffect(() => {
-    if (!listOverlayOpen && isShellMap) routesButtonRef.current?.focus();
+    if (!isShellMap && !listOverlayOpen) routesButtonRef.current?.focus();
   }, [listOverlayOpen, isShellMap]);
 
   const handleListRouteClick = useCallback((slug: string) => {
     setListOverlayOpen(false);
-    navigate(`/routes/${slug}`);
+    navigate(`/routes/${slug}`, { state: { openDrawer: true, preserveViewport: true } });
   }, [navigate]);
 
-  const floatingButtonStyle = {
-    position: 'absolute' as const,
-    zIndex: 100,
-    padding: '0.5rem 0.75rem',
-    fontSize: '0.875rem',
-    border: '1px solid #d1d5db',
-    borderRadius: 6,
-    background: 'rgba(255,255,255,0.95)',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    cursor: 'pointer' as const,
-    pointerEvents: 'auto' as const,
-  };
-
-  /** List overlay starts below menu row (0.75rem + ~2.25rem) + small gap = 3.25rem. */
-  const listOverlayTop = '3.5rem';
+  const showWelcomeModal = !isAuthenticated && !welcomeDismissed;
 
   return (
     <div
@@ -579,150 +834,37 @@ export function Browse() {
           : { padding: '1rem', display: 'flex', flexDirection: 'column' }
       }
     >
+      {isShellMap && (
+        <div
+          ref={mapFocusRef}
+          tabIndex={-1}
+          aria-label="Map"
+          data-testid="map-focus-return"
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none', overflow: 'hidden' }}
+        />
+      )}
+      <WelcomeModal open={showWelcomeModal} onDismiss={() => setWelcomeDismissed(true)} />
+      {isShellMap && selectedPhotoForLightbox && (
+        <PhotoGallery
+          photos={[{ id: selectedPhotoForLightbox.id, caption: selectedPhotoForLightbox.caption }]}
+          selectedPhotoId={selectedPhotoForLightbox.id}
+          showGrid={false}
+          lightboxContext={{
+            user: selectedPhotoForLightbox.userName ? { id: '', name: selectedPhotoForLightbox.userName } : undefined,
+            routes: selectedPhotoForLightbox.routeSlugs,
+            onOpenRoute: selectedPhotoForLightbox.routeSlugs?.length
+              ? (slug) => {
+                  setSelectedPhotoForLightbox(null);
+                  navigate(`/routes/${slug}`, { state: { openDrawer: true, preserveViewport: true } });
+                }
+              : undefined,
+          }}
+          onClose={() => setSelectedPhotoForLightbox(null)}
+          returnFocusRef={mapFocusRef}
+        />
+      )}
       {isShellMap ? (
         <>
-          <div style={{ position: 'absolute', top: '1rem', right: '5rem', pointerEvents: 'auto', zIndex: 500 }}>
-            <button
-              ref={filtersButtonRef}
-              type="button"
-              onClick={() => setFiltersOverlayOpen(true)}
-              style={{ ...floatingButtonStyle, flexShrink: 0 }}
-              aria-label="Open filters"
-            >
-              Filters
-            </button>
-          </div>
-          <div style={{ position: 'absolute', top: '3.5rem', left: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem', pointerEvents: 'auto', zIndex: 500 }}>
-            {!listOverlayOpen && (
-              <button
-                ref={routesButtonRef}
-                type="button"
-                onClick={() => {
-                  listPage.current = 1;
-                  fetchList();
-                  setListOverlayOpen(true);
-                }}
-                style={{ ...floatingButtonStyle, flexShrink: 0 }}
-                aria-label="Open routes"
-              >
-                Routes
-              </button>
-            )}
-          </div>
-
-          {filtersOverlayOpen && (
-            <>
-              <div
-                role="presentation"
-                aria-hidden="true"
-                style={{ position: 'absolute', inset: 0, zIndex: 301, background: 'rgba(0,0,0,0.3)', pointerEvents: 'auto' }}
-                onClick={() => setFiltersOverlayOpen(false)}
-              />
-              <div
-                ref={filtersOverlayRef}
-                role="dialog"
-                aria-modal="true"
-                aria-label="Filter by tags"
-                style={{
-                  position: 'absolute',
-                  top: '4rem',
-                  right: '1rem',
-                  zIndex: 302,
-                  minWidth: 260,
-                  padding: '1rem',
-                  background: '#fff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 8,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                  pointerEvents: 'auto',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <h3 style={{ margin: 0, fontSize: '1rem' }}>Filters</h3>
-                  <button type="button" onClick={() => setFiltersOverlayOpen(false)} aria-label="Close">×</button>
-                </div>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.75rem' }}>
-                  <span style={{ fontSize: '0.875rem' }}>Tags</span>
-                  <input
-                    type="text"
-                    value={tagsFilter}
-                    onChange={(e) => setTagsFilter(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (handleApplyTags(), setFiltersOverlayOpen(false))}
-                    placeholder="e.g. urban, night"
-                    style={{ padding: '0.35rem 0.5rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                  />
-                </label>
-                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                  <button type="button" onClick={() => setFiltersOverlayOpen(false)}>Cancel</button>
-                  <button
-                    type="button"
-                    onClick={() => { handleApplyTags(); setFiltersOverlayOpen(false); }}
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-
-          {listOverlayOpen && (
-            <>
-              <div
-                role="presentation"
-                aria-hidden="true"
-                style={{ position: 'absolute', inset: 0, zIndex: 201, background: 'rgba(0,0,0,0.3)', pointerEvents: 'auto' }}
-                onClick={() => setListOverlayOpen(false)}
-              />
-              <div
-                ref={listOverlayRef}
-                role="dialog"
-                aria-modal="true"
-                aria-label="Routes list"
-                style={{
-                  position: 'absolute',
-                  top: listOverlayTop,
-                  left: '0.75rem',
-                  right: '0.75rem',
-                  bottom: '0.75rem',
-                  maxWidth: 400,
-                  maxHeight: 'calc(100vh - 4rem)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  background: '#fff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 8,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                  pointerEvents: 'auto',
-                  zIndex: 202,
-                  overflow: 'hidden',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderBottom: '1px solid #e5e7eb', gap: '0.5rem' }}>
-                  <h3 style={{ margin: 0, fontSize: '1rem' }}>Routes</h3>
-                  <div style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button
-                      type="button"
-                      onClick={() => setFiltersOverlayOpen(true)}
-                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.8125rem', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', cursor: 'pointer' }}
-                    >
-                      Filters
-                    </button>
-                    <button type="button" onClick={() => setListOverlayOpen(false)} aria-label="Close">×</button>
-                  </div>
-                </div>
-                <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-                  <RouteList
-                    routes={routes}
-                    pagination={pagination}
-                    loading={loading}
-                    onPageChange={handleListPageChange}
-                    onRouteClick={handleListRouteClick}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
           {overlayMessage && (
             <div
               style={{
@@ -805,6 +947,7 @@ export function Browse() {
                 pagination={pagination}
                 loading={loading}
                 onPageChange={handleListPageChange}
+                onRouteClick={handleListRouteClick}
               />
             </div>
           )}

@@ -16,10 +16,15 @@ alwaysApply: false
 - Before calling a library method (e.g. get vs getAll), **verify the actual API** from the package's type definitions (`node_modules/<pkg>/index.d.ts`) or official docs. Assuming the wrong method leads to silent wrong data (null/undefined) and confusing UX (e.g. "draw a route" validation failing despite a visible line).
 - Prefer reading types over docs when they exist; types are the contract the runtime will follow.
 
+## Consistency with Existing Views
+
+- When a **new flow or page** should look and behave like an **existing one** (e.g. create-route map like route detail), **reuse the same components and patterns** (map: same source/layer setup, symbol layer, pin images; thumbnails: same API and parent-level cache). Do not reimplement with different primitives (e.g. Markers instead of GeoJSON + symbol layer, or a custom thumbnail loader instead of the shared fetch + cache). Reuse keeps behavior and visuals consistent and avoids "display exactly as route detail" rework later.
+
 ## Map + Control Teardown Order
 
 - When a map and a map control (e.g. MapboxDraw, custom overlay) live in **sibling components**, React effect cleanup order between them is **undefined**. The map container may run `map.remove()` before the control runs `map.removeControl(control)`; the control's `onRemove` can then run against an already-destroyed map and throw (e.g. "Cannot read properties of null (reading 'off')").
 - **Defensive teardown:** Wrap control cleanup (listener removal, `removeControl`) in try/catch. Clear your own refs after the try block so cleanup remains idempotent. Alternatively, coordinate so the control is removed before the map is destroyed (e.g. single owner that removes control then map).
+- When a component adds **custom layers, sources, or map images** (e.g. route line, pin images), **remove them in effect cleanup** (removeLayer, removeSource, removeImage for each added image id). Otherwise the map can show stale data when navigating away or when the same map is reused by another view.
 
 ## Map Basemap and Style Loading
 
@@ -49,15 +54,38 @@ alwaysApply: false
 
 - When the user requests a change to "the floating button" or "the X" in a context where similar elements exist across multiple pages (e.g. Browse, My Routes, Create Route, Route Detail), **assume the scope is the current context** unless the user explicitly says "all" or "app-wide." Do not change every similar element across the app without clear scope; over-application leads to reverts.
 
+## Layout: Shared Dimensions for Aligned Chrome
+
+- When two or more UI pieces must stay **spatially aligned** (e.g. a nav rail and a panel that opens beside it), define the driving dimension (e.g. nav width) in **one canonical place** and export it for consumers (e.g. panel `left` offset). This keeps the chrome coherent and avoids drift when one value is changed later.
+
+## Layout: Persistent Chrome and Sibling Panels
+
+- When a chrome element (nav, sidebar) is **always visible** rather than toggle-open, position any dependent panels or overlays so they appear **adjacent** to that chrome (e.g. panel `left` = nav width), so the whole reads as one coherent unit. Do not leave panels as full-viewport overlays once the chrome is persistent.
+- When adding a **new** fixed-position overlay (drawer, panel, modal), use the same canonical layout constant (e.g. nav rail width) so the overlay aligns with the chrome—e.g. bottom drawer `left` = nav width so it starts where the menu bar ends.
+
+## Layout: Modals and Overlays Inside pointer-events: none
+
+- When a modal, lightbox, or overlay is rendered inside a parent that has `pointer-events: none` (e.g. a map shell or pointer-events-none wrapper), set **`pointer-events: auto`** on the overlay root element. Otherwise the overlay cannot receive clicks (close button, backdrop, links) and will appear non-interactive; tests that click inside the overlay will fail with "Unable to perform pointer interaction as the element has pointer-events: none."
+
+## Layout: Dense Chrome and Button Visibility
+
+- When placing **multiple controls** in the same corner (e.g. top-right), avoid a single row if it causes overlap or one control to be hidden by others (e.g. account icon, other chrome). Use vertical stacking (separate rows) or sufficient spacing so each control is visible and clickable.
+- When an **overlay** (modal, lightbox) has its own controls in the same corner as **fixed chrome** (e.g. account button), position the overlay’s control strip with an offset so it sits clear of the chrome (e.g. `right: 4rem` so buttons are left of the fixed icon), and set the overlay’s `z-index` above the chrome so the overlay and its controls stack on top when open.
+
 ## Expected UI or Changes Not Visible
 
 - When the user reports that new or changed UI is not visible (e.g. "I don't see the button" or "nothing was added") **and the code is present in the repo**, consider **environment and runtime** before changing layout or visibility.
 - **Port / process mismatch:** The dev server may be running on a different port (e.g. 5174) if the default (e.g. 5173) was in use. The user may be viewing the old port and thus a different process or stale app. Have them confirm the URL and the port printed in the terminal where the dev server started; suggest a hard refresh (Cmd+Shift+R / Ctrl+Shift+R) or opening the URL the server actually reports.
 - **Make the port predictable:** Use `server.port` and `server.strictPort: true` (Vite) so the server fails fast on the default port instead of silently using another; document how to free the port if needed.
+- **API or backend behavior not updating:** When a backend/API change doesn't appear (e.g. new endpoint returns 404, or "fix didn't work" for an API call), the backend may be running from a **built artifact** (e.g. Docker image). Code changes require rebuild/redeploy. See Implementation Doctrine: Docker vs Local Backend.
 
 ## Testing: Match Project Assertion Style and Setup
 
 - Before adding tests, verify the project's test runner, matchers, and setup (e.g. Vitest without jest-dom). Use the same assertion style as existing tests in the same codebase (e.g. `expect(el).toBeTruthy()` rather than `expect(el).toBeInTheDocument()` if jest-dom is not configured). Replicating existing patterns avoids failures from missing or different matchers.
+
+## Testing: Fakes Must Satisfy Code Paths
+
+- When a test provides a **fake or mock** for a dependency (e.g. a map object, API module), ensure the fake implements **every method or return value** that the code path under test will call. Missing methods (e.g. `getZoom` on a fake map) or unmocked functions that return `undefined` (e.g. `fetchPhotoImageBlob` when the component fetches thumbnails) cause `TypeError` or assertion failures. Add the missing stub or mock (e.g. `getZoom: vi.fn().mockReturnValue(12)`, `fetchPhotoImageBlob: vi.fn().mockResolvedValue(new Blob())`) before asserting on the outcome.
 
 ## Testing: Queries When Text Appears in Multiple Nodes
 
@@ -66,6 +94,10 @@ alwaysApply: false
 ## Testing: Conditional Rendering Changes
 
 - When adding **conditional rendering** that hides previously-visible elements (e.g. hide a button when an overlay is open), update tests that assert or interact with those elements. The element may no longer be present in the DOM in the tested state; adjust assertions and interaction flow accordingly (e.g. assert on the overlay instead, or test the closed state first).
+
+## Testing: Callback Invocation Assertions
+
+- When asserting that a callback was invoked (e.g. `onClose`, `onOpenRoute`), prefer **`toHaveBeenCalled()`** over **`toHaveBeenCalledTimes(1)`** if the callback can legitimately be invoked from multiple code paths or as a side effect of framework behaviour (e.g. React Strict Mode double-invoking effects). Asserting exact call count in those cases leads to flaky tests.
 
 ## Types: API Response and Minimal Component Props
 
@@ -87,6 +119,7 @@ alwaysApply: false
 - **Dependency arrays:** `useCallback` and `useEffect` dependency arrays must list every value the callback reads (to satisfy `react-hooks/exhaustive-deps` and React Compiler). If the compiler reports "inferred dependency was X, but the source dependencies were [Y]", align the source dependencies with the inferred one (e.g. use `photosWithLocation` instead of a derived key like `photoIdsKey` when the callback iterates over the array). Memoize object/array values that are used in dependency arrays (e.g. `useMemo(() => route.route_geometry?.coordinates ?? [], [route.route_geometry])`) so their identity is stable and callbacks do not recreate every render.
 - **Complex expressions in dependency arrays:** Avoid expressions like `[center[0], center[1]]`; extract to named variables (e.g. `centerLng`, `centerLat`) so the array is statically checkable and the linter can validate.
 - **Callbacks that must not re-run an effect:** When an effect (e.g. map init) must run only once but uses a callback prop (e.g. `onMapReady`), store the callback in a ref updated in a separate effect (`useEffect(() => { ref.current = callback; }, [callback])`) and invoke `ref.current?.()` inside the one-off effect. Do not add the callback to the one-off effect's dependency array.
+- **Event handlers that need current state:** When an event handler is registered once (e.g. `map.on('click', layerId, handler)`) but must read **current** state or props, the handler would otherwise close over stale values. Use a **ref** (e.g. `dataRef`) updated in an effect (`useEffect(() => { dataRef.current = data; }, [data])`) and read `dataRef.current` inside the handler so it always sees the latest value without re-registering the handler.
 - **Refs and render:** Do not assign to `ref.current` during render. Update refs in `useEffect` or in event handlers so that React's ref rules (and rules like `react-hooks/refs`) are satisfied.
 - **CI lint errors:** When the user reports lint or React Compiler errors with specific file paths and line numbers, treat that code as present in the environment that runs the check. Apply dependency and memoization fixes to the reported call sites; re-read the file if a previous read showed fewer lines (e.g. different branch or stale view).
 - **After adding a new module** that other files import, run the project's lint (or build) once so missing-file or resolution errors surface immediately.

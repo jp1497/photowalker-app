@@ -22,3 +22,32 @@ export interface UploadPhotoResponse {
 export interface RoutePhotosResponse {
   photos: Photo[];
 }
+
+/** User summary in GET /v1/photos (photos-in-bbox). PRD v6. */
+export interface PhotoBrowseUser {
+  id: string;
+  name: string;
+}
+
+/** Route ref for lightbox "Open route". PRD v6 Step 3.2. */
+export interface PhotoBrowseRouteRef {
+  slug: string;
+  title?: string;
+}
+
+/** Photo item from GET /v1/photos?bbox= for map pins and lightbox. PRD v6 Step 0.1. */
+export interface PhotoBrowseItem {
+  id: string;
+  caption: string | null;
+  user: PhotoBrowseUser;
+  route_ids: string[];
+  routes?: PhotoBrowseRouteRef[];
+  image_url: string;
+  location: { type: 'Point'; coordinates: [number, number] } | null;
+}
+
+/** GET /v1/photos?bbox= response. */
+export interface PhotosBrowseResponse {
+  photos: PhotoBrowseItem[];
+  pagination: { page: number; per_page: number; total: number };
+}

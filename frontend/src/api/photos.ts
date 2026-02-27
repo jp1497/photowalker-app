@@ -1,6 +1,6 @@
 /** Photo API calls. */
 import { apiClient } from './client';
-import type { Photo, RoutePhotosResponse, UploadPhotoResponse } from '../types/photo';
+import type { Photo, PhotosBrowseResponse, RoutePhotosResponse, UploadPhotoResponse } from '../types/photo';
 
 /** GeoJSON Point for PATCH location. */
 export interface PhotoLocationUpdate {
@@ -37,6 +37,18 @@ export async function uploadPhoto(
   const { data } = await apiClient.post<UploadPhotoResponse>('/v1/photos', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 60_000,
+  });
+  return data;
+}
+
+/** Browse photos in viewport (bbox) for map pins and lightbox. PRD v6 Step 0.1. No auth required. */
+export async function getPhotosInBbox(
+  bbox: string,
+  page = 1,
+  per_page = 50
+): Promise<PhotosBrowseResponse> {
+  const { data } = await apiClient.get<PhotosBrowseResponse>('/v1/photos', {
+    params: { bbox, page, per_page },
   });
   return data;
 }

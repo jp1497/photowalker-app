@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.exceptions import PhotoForbiddenError, PhotoNotFoundError
+from app.core.exceptions import BboxTooLargeError, PhotoForbiddenError, PhotoNotFoundError
 from app.models import Photo, Route, RoutePhoto, User
 from app.services import photo_service
 from tests.conftest import requires_postgres
@@ -332,3 +332,216 @@ async def test_delete_photo_not_found_raises(db_session: AsyncSession) -> None:
 
     with pytest.raises(PhotoNotFoundError):
         await photo_service.delete_photo(db_session, settings, uuid4(), user.id)
+
+
+# --- browse_photos (PRD v6 - Step 0.1) ---
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_browse_photos_returns_photos_in_bbox_on_public_route(db_session: AsyncSession) -> None:
+    """browse_photos returns photos with location inside bbox that are on a public non-draft route."""
+    user = User(google_id="browse1", email="browse1@example.com", name="Browse User")
+    db_session.add(user)
+    await db_session.flush()
+    route = Route(
+        user_id=user.id,
+        slug="browse-route-public",
+        title="Public",
+        route_geometry=WKTElement("LINESTRING(-122.4 37.8, -122.38 37.82)", srid=4326),
+        distance_meters=100.0,
+        is_public=True,
+        is_draft=False,
+    )
+    db_session.add(route)
+    await db_session.flush()
+    photo = Photo(
+        user_id=user.id,
+        s3_key_original="photos/u/bp1/original.jpg",
+        location=WKTElement("POINT(-122.4 37.8)", srid=4326),
+        file_size_bytes=100,
+    )
+    db_session.add(photo)
+    await db_session.flush()
+    db_session.add(RoutePhoto(route_id=route.id, photo_id=photo.id, display_order=0))
+    await db_session.flush()
+
+    bbox = (-122.42, 37.78, -122.38, 37.84)
+    photos, total, page, per_page = await photo_service.browse_photos(db_session, bbox=bbox)
+    assert total >= 1
+    our = next((p for p in photos if p.id == photo.id), None)
+    assert our is not None, "our photo (public route, in bbox) should appear in browse_photos"
+    assert our.user.name == "Browse User"
+    assert len(our.route_photos) == 1
+    assert our.route_photos[0].route.slug == "browse-route-public"
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_browse_photos_excludes_photos_outside_bbox(db_session: AsyncSession) -> None:
+    """browse_photos does not return photos whose location is outside the bbox."""
+    user = User(google_id="browse2", email="browse2@example.com", name="Browse Two")
+    db_session.add(user)
+    await db_session.flush()
+    route = Route(
+        user_id=user.id,
+        slug="browse-route-out",
+        title="Out",
+        route_geometry=WKTElement("LINESTRING(-122.4 38.5, -122.39 38.51)", srid=4326),
+        distance_meters=100.0,
+        is_public=True,
+        is_draft=False,
+    )
+    db_session.add(route)
+    await db_session.flush()
+    photo = Photo(
+        user_id=user.id,
+        s3_key_original="photos/u/bp2/original.jpg",
+        location=WKTElement("POINT(-122.4 38.5)", srid=4326),
+        file_size_bytes=100,
+    )
+    db_session.add(photo)
+    await db_session.flush()
+    db_session.add(RoutePhoto(route_id=route.id, photo_id=photo.id, display_order=0))
+    await db_session.flush()
+
+    bbox = (-122.42, 37.78, -122.38, 37.84)
+    photos, total, _, _ = await photo_service.browse_photos(db_session, bbox=bbox)
+    our = next((p for p in photos if p.id == photo.id), None)
+    assert our is None, "photo outside bbox (lat 38.5) must not appear when bbox is 37.78-37.84"
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_browse_photos_excludes_photos_only_on_draft_route(db_session: AsyncSession) -> None:
+    """browse_photos does not return photos that appear only on draft routes."""
+    user = User(google_id="browse3a", email="browse3a@example.com", name="Browse Three A")
+    db_session.add(user)
+    await db_session.flush()
+    route = Route(
+        user_id=user.id,
+        slug="browse-route-draft",
+        title="Draft",
+        route_geometry=WKTElement("LINESTRING(-122.4 37.8, -122.38 37.82)", srid=4326),
+        distance_meters=100.0,
+        is_public=True,
+        is_draft=True,
+    )
+    db_session.add(route)
+    await db_session.flush()
+    photo = Photo(
+        user_id=user.id,
+        s3_key_original="photos/u/bp3a/original.jpg",
+        location=WKTElement("POINT(-122.4 37.8)", srid=4326),
+        file_size_bytes=100,
+    )
+    db_session.add(photo)
+    await db_session.flush()
+    db_session.add(RoutePhoto(route_id=route.id, photo_id=photo.id, display_order=0))
+    await db_session.flush()
+
+    bbox = (-122.42, 37.78, -122.38, 37.84)
+    photos, total, _, _ = await photo_service.browse_photos(db_session, bbox=bbox)
+    our = next((p for p in photos if p.id == photo.id), None)
+    assert our is None, "photo only on draft route must not appear in browse_photos"
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_browse_photos_excludes_photos_only_on_private_route(db_session: AsyncSession) -> None:
+    """browse_photos returns only photos that appear on at least one public route."""
+    user = User(google_id="browse3", email="browse3@example.com", name="Browse Three")
+    db_session.add(user)
+    await db_session.flush()
+    route = Route(
+        user_id=user.id,
+        slug="browse-route-private",
+        title="Private",
+        route_geometry=WKTElement("LINESTRING(-122.4 37.8, -122.38 37.82)", srid=4326),
+        distance_meters=100.0,
+        is_public=False,
+        is_draft=False,
+    )
+    db_session.add(route)
+    await db_session.flush()
+    photo = Photo(
+        user_id=user.id,
+        s3_key_original="photos/u/bp3/original.jpg",
+        location=WKTElement("POINT(-122.4 37.8)", srid=4326),
+        file_size_bytes=100,
+    )
+    db_session.add(photo)
+    await db_session.flush()
+    db_session.add(RoutePhoto(route_id=route.id, photo_id=photo.id, display_order=0))
+    await db_session.flush()
+
+    bbox = (-122.42, 37.78, -122.38, 37.84)
+    photos, total, _, _ = await photo_service.browse_photos(db_session, bbox=bbox)
+    our = next((p for p in photos if p.id == photo.id), None)
+    assert our is None, "photo only on private route must not appear in browse_photos"
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_browse_photos_bbox_too_large_raises(db_session: AsyncSession) -> None:
+    """browse_photos raises BboxTooLargeError when bbox area exceeds 200 km²."""
+    huge_bbox = (-122.5, 37.0, -121.5, 38.0)
+    with pytest.raises(BboxTooLargeError):
+        await photo_service.browse_photos(db_session, bbox=huge_bbox)
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_browse_photos_pagination(db_session: AsyncSession) -> None:
+    """browse_photos respects page and per_page; returns correct total."""
+    user = User(google_id="browse4", email="browse4@example.com", name="Browse Four")
+    db_session.add(user)
+    await db_session.flush()
+    route = Route(
+        user_id=user.id,
+        slug="browse-route-pag",
+        title="Pag",
+        route_geometry=WKTElement("LINESTRING(-122.4 37.8, -122.38 37.82)", srid=4326),
+        distance_meters=100.0,
+        is_public=True,
+        is_draft=False,
+    )
+    db_session.add(route)
+    await db_session.flush()
+    our_photo_ids = []
+    for i in range(4):
+        p = Photo(
+            user_id=user.id,
+            s3_key_original=f"photos/u/bp4-{i}/original.jpg",
+            location=WKTElement("POINT(-122.4 37.8)", srid=4326),
+            file_size_bytes=100,
+        )
+        db_session.add(p)
+        await db_session.flush()
+        db_session.add(RoutePhoto(route_id=route.id, photo_id=p.id, display_order=i))
+        await db_session.flush()
+        our_photo_ids.append(p.id)
+
+    bbox = (-122.42, 37.78, -122.38, 37.84)
+    photos_p1, total, page, per_page = await photo_service.browse_photos(
+        db_session, bbox=bbox, page=1, per_page=2
+    )
+    assert total >= 4
+    assert page == 1
+    assert per_page == 2
+    assert len(photos_p1) == 2
+
+    photos_p2, total2, page2, _ = await photo_service.browse_photos(
+        db_session, bbox=bbox, page=2, per_page=2
+    )
+    assert total2 >= 4
+    assert page2 == 2
+    assert len(photos_p2) == 2
+
+    all_ids = [p.id for p in photos_p1] + [p.id for p in photos_p2]
+    found = sum(1 for pid in our_photo_ids if pid in all_ids)
+    assert found >= 1, "at least one of our 4 photos should appear in first two pages (shared DB)"
+    full_page = await photo_service.browse_photos(db_session, bbox=bbox, page=1, per_page=100)
+    all_returned_ids = [p.id for p in full_page[0]]
+    for pid in our_photo_ids:
+        assert pid in all_returned_ids, f"our photo {pid} must be in bbox browse result"

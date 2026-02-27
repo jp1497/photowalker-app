@@ -1,4 +1,4 @@
-/** Gallery of photos with lightbox. Click photo to open modal. */
+/** Gallery of photos with lightbox. Click photo to open modal. Reused for browse single-photo view. */
 import { useState, useEffect, useRef } from 'react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { PhotoImage } from './PhotoImage';
@@ -7,6 +7,13 @@ import { PhotoImage } from './PhotoImage';
 export interface GalleryPhoto {
   id: string;
   caption: string | null;
+}
+
+/** Optional context for lightbox (e.g. browse: user name and routes containing the photo). */
+export interface PhotoGalleryLightboxContext {
+  user?: { id: string; name: string };
+  routes?: { slug: string; title?: string }[];
+  onOpenRoute?: (slug: string) => void;
 }
 
 interface PhotoGalleryProps {
@@ -18,15 +25,36 @@ interface PhotoGalleryProps {
   isOwner?: boolean;
   /** Called when user chooses to edit this photo's location. */
   onEditLocation?: (photoId: string) => void;
+  /** When false, do not render the thumbnail grid (lightbox-only mode, e.g. browse). */
+  showGrid?: boolean;
+  /** Optional user and routes for lightbox; when onOpenRoute is set, show "Open route" links. */
+  lightboxContext?: PhotoGalleryLightboxContext | null;
+  /** Called when the lightbox is closed (e.g. to clear selection and return focus). */
+  onClose?: () => void;
+  /** Ref for element to receive focus when lightbox closes (e.g. map or pin trigger). */
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
-export function PhotoGallery({ photos, selectedPhotoId = null, onSelectPhoto, isOwner, onEditLocation }: PhotoGalleryProps) {
+export function PhotoGallery({
+  photos,
+  selectedPhotoId = null,
+  onSelectPhoto,
+  isOwner,
+  onEditLocation,
+  showGrid = true,
+  lightboxContext,
+  onClose,
+  returnFocusRef,
+}: PhotoGalleryProps) {
   const [modalIndex, setModalIndex] = useState<number | null>(null);
   const lightboxRef = useRef<HTMLDivElement>(null);
 
-  const closeModal = () => setModalIndex(null);
+  const closeModal = () => {
+    setModalIndex(null);
+    onClose?.();
+  };
 
-  useFocusTrap(lightboxRef, { active: modalIndex != null });
+  useFocusTrap(lightboxRef, { active: modalIndex != null, returnFocusRef });
 
   useEffect(() => {
     if (modalIndex == null) return;
@@ -51,11 +79,16 @@ export function PhotoGallery({ photos, selectedPhotoId = null, onSelectPhoto, is
   };
 
   if (photos.length === 0) {
+    if (!showGrid) return null;
     return <p style={{ color: '#666' }}>No photos yet.</p>;
   }
 
+  const ctx = lightboxContext;
+  const hasOpenRoute = !!(ctx?.routes?.length && ctx?.onOpenRoute);
+
   return (
     <>
+      {showGrid && (
       <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
         {photos.map((photo, index) => (
           <li
@@ -95,6 +128,7 @@ export function PhotoGallery({ photos, selectedPhotoId = null, onSelectPhoto, is
           </li>
         ))}
       </ul>
+      )}
 
       {modalIndex != null && (
         <div
@@ -109,11 +143,12 @@ export function PhotoGallery({ photos, selectedPhotoId = null, onSelectPhoto, is
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 1001,
+            pointerEvents: 'auto',
           }}
           onClick={closeModal}
         >
-          <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: '0.5rem' }}>
+          <div style={{ position: 'absolute', top: 16, right: '4rem', display: 'flex', gap: '0.5rem' }}>
             {isOwner && onEditLocation && (
               <button
                 type="button"
@@ -158,6 +193,33 @@ export function PhotoGallery({ photos, selectedPhotoId = null, onSelectPhoto, is
             />
             {photos[modalIndex].caption && (
               <p style={{ color: '#fff', margin: 0, fontSize: '0.875rem' }}>{photos[modalIndex].caption}</p>
+            )}
+            {(ctx?.user?.name || hasOpenRoute) && (
+              <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.875rem' }}>
+                {ctx?.user?.name && <p style={{ margin: '0 0 0.25rem' }}>{ctx.user.name}</p>}
+                {hasOpenRoute && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {ctx!.routes!.map((r) => (
+                      <button
+                        key={r.slug}
+                        type="button"
+                        onClick={() => ctx!.onOpenRoute!(r.slug)}
+                        style={{
+                          background: 'transparent',
+                          color: '#93c5fd',
+                          border: '1px solid rgba(147,197,253,0.6)',
+                          borderRadius: 4,
+                          padding: '0.25rem 0.5rem',
+                          cursor: 'pointer',
+                          fontSize: '0.875rem',
+                        }}
+                      >
+                        Open route{r.title ? `: ${r.title}` : ''}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

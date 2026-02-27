@@ -11,6 +11,12 @@ export interface RouteListProps {
   onPageChange: (page: number) => void;
   /** When set, called on route click instead of navigating (e.g. to close overlay then navigate). */
   onRouteClick?: (slug: string) => void;
+  /** Slug of the route currently highlighted (e.g. hover or tap). Used for map highlight and card styling. */
+  highlightedRouteSlug?: string | null;
+  /** Called when pointer enters a route card. */
+  onRouteMouseEnter?: (route: Route) => void;
+  /** Called when pointer leaves a route card. */
+  onRouteMouseLeave?: () => void;
 }
 
 function formatDate(iso: string): string {
@@ -25,7 +31,16 @@ function formatDate(iso: string): string {
   }
 }
 
-export function RouteList({ routes, pagination, loading, onPageChange, onRouteClick }: RouteListProps) {
+export function RouteList({
+  routes,
+  pagination,
+  loading,
+  onPageChange,
+  onRouteClick,
+  highlightedRouteSlug = null,
+  onRouteMouseEnter,
+  onRouteMouseLeave,
+}: RouteListProps) {
   const navigate = useNavigate();
   const { page, per_page, total } = pagination;
   const totalPages = Math.max(1, Math.ceil(total / per_page));
@@ -67,7 +82,9 @@ export function RouteList({ routes, pagination, loading, onPageChange, onRouteCl
           overflow: 'auto',
         }}
       >
-        {routes.map((route) => (
+        {routes.map((route) => {
+          const isHighlighted = route.slug === highlightedRouteSlug;
+          return (
           <li
             key={route.id}
             style={{
@@ -75,12 +92,16 @@ export function RouteList({ routes, pagination, loading, onPageChange, onRouteCl
               gap: '0.75rem',
               padding: '0.75rem',
               marginBottom: '0.5rem',
-              border: '1px solid #e5e7eb',
+              minHeight: 44,
+              border: isHighlighted ? '2px solid #2563eb' : '1px solid #e5e7eb',
               borderRadius: '6px',
               cursor: 'pointer',
-              background: '#fff',
+              background: isHighlighted ? '#eff6ff' : '#fff',
             }}
             onClick={() => handleRouteClick(route.slug)}
+            onMouseEnter={() => onRouteMouseEnter?.(route)}
+            onMouseLeave={() => onRouteMouseLeave?.()}
+            onPointerDown={() => onRouteMouseEnter?.(route)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
@@ -148,7 +169,8 @@ export function RouteList({ routes, pagination, loading, onPageChange, onRouteCl
             )}
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
       {totalPages > 1 && (
         <div

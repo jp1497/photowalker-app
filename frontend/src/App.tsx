@@ -1,25 +1,34 @@
-import { useEffect } from 'react';
-import { BrowserRouter, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { Loading } from './components/common/Loading';
 import { Toast } from './components/common/Toast';
-import { AppMenu } from './components/common/AppMenu';
+import { AccountIcon } from './components/common/AccountIcon';
+import { DrawerMenu } from './components/common/DrawerMenu';
+import { HighlightedRouteLayer } from './components/map/HighlightedRouteLayer';
 import { MapShell } from './components/map/MapShell';
+import { ExploreRoutesPanel } from './components/explore/ExploreRoutesPanel';
+import { HighlightedRouteContext } from './contexts/HighlightedRouteContext';
+import { RoutesPanelProvider, useRoutesPanel } from './contexts/RoutesPanelContext';
 import { AuthCallback } from './pages/AuthCallback';
 import { Browse } from './pages/Browse';
 import { CreateRouteFromPhotos } from './pages/CreateRouteFromPhotos';
-import { Home } from './pages/Home';
 import { Login } from './pages/Login';
-import { MyRoutes } from './pages/MyRoutes';
 import { NotFound } from './pages/NotFound';
 import { RouteDetail } from './pages/RouteDetail';
+import { Settings } from './pages/Settings';
 import './App.css';
 
 function MapShellLayout() {
   const location = useLocation();
   const { slug } = useParams<{ slug: string }>();
+  const routesPanel = useRoutesPanel();
   const pathname = location.pathname;
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [highlightedRouteSlug, setHighlightedRouteSlug] = useState<string | null>(null);
+  const [highlightedLayerReady, setHighlightedLayerReady] = useState(false);
 
   useEffect(() => {
     const root = document.getElementById('root');
@@ -30,21 +39,80 @@ function MapShellLayout() {
     };
   }, []);
 
+  /** Sync highlight from URL when on /browse (e.g. initial load or back/forward). Defer setState to avoid synchronous setState in effect. */
+  useEffect(() => {
+    if (pathname !== '/browse') return;
+    const slug = searchParams.get('route') || null;
+    const id = setTimeout(() => setHighlightedRouteSlug(slug), 0);
+    return () => clearTimeout(id);
+  }, [pathname, searchParams]);
+
+  /** Set highlighted route (panel hover/select). Update state immediately so HighlightedRouteLayer and fade respond; keep URL in sync for /browse?route=:slug. */
+  const handleHighlightRoute = useCallback(
+    (slug: string | null) => {
+      setHighlightedRouteSlug(slug);
+      if (pathname === '/browse') {
+        if (slug) {
+          setSearchParams({ route: slug }, { replace: true });
+        } else {
+          setSearchParams({}, { replace: true });
+        }
+      }
+    },
+    [pathname, setSearchParams]
+  );
+
+  /** Open route in drawer: close routes panel, navigate to /routes/:slug. Preserve map viewport for seamless transition. */
+  const handleRouteSelect = useCallback(
+    (routeSlug: string) => {
+      routesPanel?.setRoutesPanelOpen(false);
+      navigate(`/routes/${routeSlug}`, { state: { openDrawer: true, preserveViewport: true } });
+    },
+    [navigate, routesPanel]
+  );
+
+  /** When panel closes, clear highlight and URL. Defer setState to avoid synchronous setState in effect. */
+  useEffect(() => {
+    if (!routesPanel?.routesPanelOpen) {
+      const id = setTimeout(() => {
+        setHighlightedRouteSlug(null);
+        setHighlightedLayerReady(false);
+      }, 0);
+      if (pathname === '/browse') setSearchParams({}, { replace: true });
+      return () => clearTimeout(id);
+    }
+  }, [routesPanel?.routesPanelOpen, pathname, setSearchParams]);
+
+  /** browse-photos = /browse (photo pins in bbox). /routes/me removed (Phase 7); My routes is panel filter only. */
   const mode =
     pathname === '/browse'
-      ? 'browse'
+      ? 'browse-photos'
       : pathname === '/routes/create'
         ? 'create'
-        : pathname === '/routes/me'
-          ? 'browse'
-          : pathname.startsWith('/routes/') && slug
-            ? 'detail'
-            : 'home';
+        : pathname.startsWith('/routes/') && slug
+          ? 'detail'
+          : 'home';
+
+  const preserveViewport = !!(location.state as { preserveViewport?: boolean })?.preserveViewport;
 
   return (
-    <MapShell mode={mode} slug={slug ?? null}>
-      <Outlet />
-    </MapShell>
+    <HighlightedRouteContext.Provider value={{ highlightedRouteSlug, highlightedLayerReady }}>
+      <MapShell mode={mode} slug={slug ?? null} preserveViewport={preserveViewport}>
+        <Outlet />
+        <HighlightedRouteLayer
+          highlightedRouteSlug={highlightedRouteSlug}
+          onHighlightedLayerReadyChange={setHighlightedLayerReady}
+        />
+        {routesPanel?.routesPanelOpen && (
+          <ExploreRoutesPanel
+            open
+            onClose={() => routesPanel.setRoutesPanelOpen(false)}
+            onHighlightRoute={handleHighlightRoute}
+            onRouteSelect={handleRouteSelect}
+          />
+        )}
+      </MapShell>
+    </HighlightedRouteContext.Provider>
   );
 }
 
@@ -62,21 +130,17 @@ function App() {
 
   return (
     <BrowserRouter>
-      <AppMenu />
-      <Routes>
+      <RoutesPanelProvider>
+        <DrawerMenu />
+        <AccountIcon />
+        <Routes>
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route element={<MapShellLayout />}>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Navigate to="/browse" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/browse" element={<Browse />} />
-          <Route
-            path="/routes/me"
-            element={
-              <ProtectedRoute>
-                <MyRoutes />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/routes/me" element={<Navigate to="/browse" replace />} />
           <Route
             path="/routes/create"
             element={
@@ -88,8 +152,9 @@ function App() {
           <Route path="/routes/:slug" element={<RouteDetail />} />
         </Route>
         <Route path="*" element={<NotFound />} />
-      </Routes>
-      <Toast />
+        </Routes>
+        <Toast />
+      </RoutesPanelProvider>
     </BrowserRouter>
   );
 }

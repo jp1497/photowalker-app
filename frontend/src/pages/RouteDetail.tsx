@@ -1,9 +1,10 @@
-/** Route detail page. Map full viewport; metadata and gallery in closable panel. */
+/** Route detail page. Map full viewport; metadata and gallery in shared BottomDrawer (PRD v6 FR-U4). */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { updatePhoto } from '../api/photos';
 import { getRouteBySlug } from '../api/routes';
+import { BottomDrawer } from '../components/common/BottomDrawer';
 import { Loading } from '../components/common/Loading';
 import { useMapContext } from '../contexts/MapContext';
 import { MapPanel } from '../components/map/MapPanel';
@@ -17,6 +18,8 @@ import type { RouteDetailResponse } from '../types/route';
 
 export function RouteDetail() {
   const { slug } = useParams<{ slug: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const mapContext = useMapContext();
   const [data, setData] = useState<RouteDetailResponse | null>(null);
@@ -28,22 +31,17 @@ export function RouteDetail() {
   const [editLocationCoords, setEditLocationCoords] = useState<[number, number] | null>(null);
   const [savingLocation, setSavingLocation] = useState(false);
   const [editLocationError, setEditLocationError] = useState<string | null>(null);
-  const [detailsPanelOpen, setDetailsPanelOpen] = useState(true);
+  const preserveViewport = !!(location.state as { preserveViewport?: boolean })?.preserveViewport;
   const { center: mapCenter } = usePreferredMapCenter();
   const isShellMap = !!mapContext;
   const detailsPanelRef = useRef<HTMLDivElement>(null);
-  const floatingButtonRef = useRef<HTMLButtonElement>(null);
   const editLocationModalRef = useRef<HTMLDivElement>(null);
 
   useFocusTrap(detailsPanelRef, {
-    active: isShellMap && detailsPanelOpen && !editingPhotoId,
+    active: isShellMap && !editingPhotoId,
   });
 
   useFocusTrap(editLocationModalRef, { active: !!editingPhotoId });
-
-  useEffect(() => {
-    if (!detailsPanelOpen && isShellMap && !editingPhotoId) floatingButtonRef.current?.focus();
-  }, [detailsPanelOpen, isShellMap, editingPhotoId]);
 
   useEffect(() => {
     if (!data) return;
@@ -107,13 +105,13 @@ export function RouteDetail() {
           setEditLocationCoords(null);
           setEditLocationError(null);
         } else {
-          setDetailsPanelOpen(false);
+          navigate('/browse');
         }
       }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [isShellMap, editingPhotoId]);
+  }, [isShellMap, editingPhotoId, navigate]);
 
   if (!slug) {
     return (
@@ -224,21 +222,6 @@ export function RouteDetail() {
     }
   };
 
-  const floatingButtonStyle = {
-    position: 'absolute' as const,
-    top: '3.5rem',
-    left: '0.75rem',
-    zIndex: 500,
-    padding: '0.5rem 0.75rem',
-    fontSize: '0.875rem',
-    border: '1px solid #d1d5db',
-    borderRadius: 6,
-    background: 'rgba(255,255,255,0.95)',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-    cursor: 'pointer' as const,
-    pointerEvents: 'auto' as const,
-  };
-
   if (!isShellMap) {
     return (
       <div style={{ padding: '2rem' }}>
@@ -330,7 +313,7 @@ export function RouteDetail() {
             </div>
           </div>
         )}
-        <RouteView route={route} photos={photos} selectedPhotoId={selectedPhotoId} onSelectPhoto={setSelectedPhotoId} />
+        <RouteView route={route} photos={photos} selectedPhotoId={selectedPhotoId} onSelectPhoto={setSelectedPhotoId} preserveViewport={isShellMap && preserveViewport} />
         <section style={{ marginTop: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
             <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Photos</h2>
@@ -377,45 +360,26 @@ export function RouteDetail() {
         zIndex: 10,
       }}
     >
-      {!detailsPanelOpen && (
-        <button
-          ref={floatingButtonRef}
-          type="button"
-          onClick={() => setDetailsPanelOpen(true)}
-          style={floatingButtonStyle}
-          aria-label="Open route details"
-        >
-          {route.title}
-        </button>
-      )}
-      {detailsPanelOpen && (
-        <div
-          ref={detailsPanelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Route details"
-          style={{
-            position: 'absolute',
-            top: '3.5rem',
-            left: '0.75rem',
-            width: 'min(420px, calc(100vw - 1.5rem))',
-            maxHeight: 'calc(100vh - 5rem)',
-            overflow: 'auto',
-            background: 'rgba(255,255,255,0.98)',
-            padding: '1rem',
-            borderRadius: 8,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            zIndex: 500,
-            pointerEvents: 'auto',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-            <p style={{ margin: 0, fontSize: '0.875rem' }}>
-              <Link to="/">Home</Link> / <Link to="/browse">Browse</Link>
-            </p>
-            <button type="button" onClick={() => setDetailsPanelOpen(false)} aria-label="Close details">×</button>
-          </div>
-          <RouteView route={route} photos={photos} selectedPhotoId={selectedPhotoId} onSelectPhoto={setSelectedPhotoId} />
+      {/* Map layers stay mounted so pins remain visible when the drawer is closed. */}
+      <RouteView
+        route={route}
+        photos={photos}
+        selectedPhotoId={selectedPhotoId}
+        onSelectPhoto={setSelectedPhotoId}
+        preserveViewport={isShellMap && preserveViewport}
+        mapOnly
+      />
+      <BottomDrawer
+        open
+        onClose={() => navigate('/browse')}
+        title={route.title}
+        initialExpanded={!!(location.state as { openDrawer?: boolean })?.openDrawer}
+      >
+        <div ref={detailsPanelRef} style={{ padding: '0 1rem 1rem' }}>
+          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.875rem' }}>
+            <Link to="/">Home</Link> / <Link to="/browse">Browse</Link>
+          </p>
+          <RouteView route={route} photos={photos} selectedPhotoId={selectedPhotoId} onSelectPhoto={setSelectedPhotoId} contentOnly />
           <section style={{ marginTop: '1.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Photos</h2>
@@ -450,7 +414,7 @@ export function RouteDetail() {
             />
           </section>
         </div>
-      )}
+      </BottomDrawer>
       {editingPhotoId && (
         <div
           ref={editLocationModalRef}

@@ -38,6 +38,7 @@ describe('CreateRouteFromPhotos', () => {
   beforeEach(() => {
     vi.mocked(routesApi.createRouteFromPhotos).mockReset();
     vi.mocked(photosApi.uploadPhoto).mockReset();
+    vi.mocked(photosApi.fetchPhotoImageBlob).mockResolvedValue(new Blob());
     mockNavigate.mockClear();
   });
 
@@ -127,7 +128,10 @@ describe('CreateRouteFromPhotos', () => {
         }),
       );
     });
-    expect(mockNavigate).toHaveBeenCalledWith('/routes/my-route', { replace: true });
+    expect(mockNavigate).toHaveBeenCalledWith('/routes/my-route', {
+      replace: true,
+      state: { openDrawer: true, preserveViewport: true },
+    });
   });
 
   it('validation: submit disabled when fewer than 2 photos', async () => {

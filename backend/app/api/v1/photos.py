@@ -1,25 +1,47 @@
-"""Photo API endpoints. PRD v2 - API - Photos, Step 4.4."""
+"""Photo API endpoints. PRD v2 - API - Photos, Step 4.4; PRD v6 - GET /v1/photos (photos-in-bbox)."""
 from __future__ import annotations
 
 import json
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException
 
 from app.auth.dependencies import get_current_user, get_current_user_required
 from app.core.config import Settings, get_settings
-from app.core.exceptions import PhotoForbiddenError, PhotoNotFoundError
+from app.core.exceptions import BboxTooLargeError, PhotoForbiddenError, PhotoNotFoundError
 from app.db.dependencies import get_db
 from app.models.user import User
-from app.schemas.photo import PhotoResponse, PhotoUpdate
+from app.schemas.photo import (
+    PhotoBrowseItem,
+    PhotoBrowseRouteRef,
+    PhotoBrowseUser,
+    PhotoResponse,
+    PhotoUpdate,
+)
 from app.services import photo_service
 from app.storage.s3 import get_file_content, get_presigned_url
 
 router = APIRouter(prefix="/v1/photos", tags=["photos"])
+
+
+def _parse_bbox(value: Optional[str]) -> Optional[tuple[float, float, float, float]]:
+    """Parse bbox query param 'min_lon,min_lat,max_lon,max_lat'. Returns None if missing/invalid."""
+    if not value or not value.strip():
+        return None
+    parts = [p.strip() for p in value.split(",")]
+    if len(parts) != 4:
+        return None
+    try:
+        min_lon, min_lat, max_lon, max_lat = (float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3]))
+    except ValueError:
+        return None
+    if min_lon > max_lon or min_lat > max_lat:
+        return None
+    return (min_lon, min_lat, max_lon, max_lat)
 
 
 def _parse_route_ids(value: str) -> list[UUID]:
@@ -33,6 +55,65 @@ def _parse_route_ids(value: str) -> list[UUID]:
         return [UUID(str(x)) for x in raw]
     except (json.JSONDecodeError, ValueError, TypeError):
         return []
+
+
+@router.get("")
+async def browse_photos(
+    db: AsyncSession = Depends(get_db),
+    bbox: str = Query(..., description="min_lon,min_lat,max_lon,max_lat (required)"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(20, ge=1, le=50, description="Items per page"),
+) -> dict:
+    """Browse photos in viewport (bbox) for map pins and lightbox. PRD v6 - Step 0.1.
+    Returns only photos with non-null location inside bbox that appear on at least one public route.
+    No auth required. Bbox area max 200 km²."""
+    bbox_tuple = _parse_bbox(bbox)
+    if bbox_tuple is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "bbox must be min_lon,min_lat,max_lon,max_lat (four numbers)",
+                "details": None,
+            },
+        )
+    try:
+        photos, total, page_out, per_page_out = await photo_service.browse_photos(
+            db, bbox=bbox_tuple, page=page, per_page=per_page
+        )
+    except BboxTooLargeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "Bounding box area exceeds maximum (200 km²)",
+                "details": None,
+            },
+        )
+    items = []
+    for p in photos:
+        route_ids = [rp.route_id for rp in p.route_photos]
+        routes = [
+            PhotoBrowseRouteRef(slug=rp.route.slug, title=rp.route.title)
+            for rp in p.route_photos
+            if rp.route
+        ]
+        user = p.user
+        items.append(
+            PhotoBrowseItem(
+                id=p.id,
+                caption=p.caption,
+                user=PhotoBrowseUser(id=user.id, name=user.name),
+                route_ids=route_ids,
+                routes=routes,
+                image_url=f"/v1/photos/{p.id}/image",
+                location=p.location,
+            )
+        )
+    return {
+        "photos": [item.model_dump(mode="json") for item in items],
+        "pagination": {"page": page_out, "per_page": per_page_out, "total": total},
+    }
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

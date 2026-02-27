@@ -48,4 +48,46 @@ describe('PhotoGallery', () => {
     const img = within(dialog).getByTestId('photo-image');
     expect(img.getAttribute('data-photo-id')).toBe('p2');
   });
+
+  it('when showGrid is false, does not render thumbnail grid (lightbox-only mode)', () => {
+    render(
+      <PhotoGallery
+        photos={[{ id: 'p1', caption: 'Only' }]}
+        selectedPhotoId="p1"
+        showGrid={false}
+      />,
+    );
+    expect(screen.queryAllByTestId('photo-image').length).toBe(1);
+    const dialog = screen.getByRole('dialog', { name: /photo lightbox/i });
+    expect(within(dialog).getByTestId('photo-image')).toBeTruthy();
+  });
+
+  it('calls onClose when lightbox is closed', async () => {
+    const onClose = vi.fn();
+    render(<PhotoGallery photos={photos} selectedPhotoId="p1" onClose={onClose} />);
+    expect(screen.getByRole('dialog', { name: /photo lightbox/i })).toBeTruthy();
+    await userEvent.click(screen.getByText('Close'));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shows user name and Open route when lightboxContext is provided', async () => {
+    const onOpenRoute = vi.fn();
+    render(
+      <PhotoGallery
+        photos={[{ id: 'p1', caption: 'Cap' }]}
+        selectedPhotoId="p1"
+        lightboxContext={{
+          user: { id: 'u1', name: 'Alice' },
+          routes: [{ slug: 'my-route', title: 'My Route' }],
+          onOpenRoute,
+        }}
+      />,
+    );
+    expect(screen.getByRole('dialog', { name: /photo lightbox/i })).toBeTruthy();
+    expect(screen.getByText('Alice')).toBeTruthy();
+    const openRouteBtn = screen.getByRole('button', { name: /open route/i });
+    expect(openRouteBtn).toBeTruthy();
+    await userEvent.click(openRouteBtn);
+    expect(onOpenRoute).toHaveBeenCalledWith('my-route');
+  });
 });

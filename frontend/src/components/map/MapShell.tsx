@@ -1,22 +1,29 @@
-/** Full-viewport map shell: single MapView, owns lifecycle. Children use MapContext for layers. */
+/**
+ * Full-viewport map shell: single MapView, owns lifecycle. Children use MapContext for layers.
+ * Map mode coordination (PRD v6 Phase 8): only one of browse-photos, detail, or create is active
+ * per route (Browse vs RouteDetail vs CreateRouteFromPhotos). HighlightedRouteLayer uses distinct
+ * source/layer IDs (highlighted-route-*). Each child tears down its layers in effect cleanup.
+ */
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { MapView } from './MapView';
 import { MapContextProvider } from '../../contexts/MapContext';
 import { usePreferredMapCenter } from '../../hooks/usePreferredMapCenter';
 
-export type MapShellMode = 'browse' | 'detail' | 'create' | 'home';
+export type MapShellMode = 'browse' | 'browse-photos' | 'detail' | 'create' | 'home';
 
 export interface MapShellProps {
   /** Current mode for future layer switching. */
   mode?: MapShellMode;
   /** Route slug when viewing a route (detail mode). */
   slug?: string | null;
+  /** When true, map keeps current viewport (no jumpTo from preferred center/zoom). Used when navigating to create or route detail. */
+  preserveViewport?: boolean;
   /** Route content and overlays. */
   children?: ReactNode;
 }
 
-export function MapShell({ children }: MapShellProps) {
+export function MapShell({ children, preserveViewport }: MapShellProps) {
   const { center, zoom, loading } = usePreferredMapCenter();
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const pendingCallbacksRef = useRef<Set<(m: MapLibreMap) => void>>(new Set());
@@ -66,6 +73,7 @@ export function MapShell({ children }: MapShellProps) {
           <MapView
             center={center}
             zoom={zoom}
+            preserveViewport={preserveViewport}
             onMapReady={handleMapReady}
             style={{ width: '100%', height: '100%' }}
           />
