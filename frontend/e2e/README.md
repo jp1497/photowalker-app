@@ -1,6 +1,6 @@
 # E2E Tests (Playwright)
 
-End-to-end tests for critical flows per [Design/IMPLEMENTATION_ROADMAP.md](../../Design/IMPLEMENTATION_ROADMAP.md) Step 7.2.
+End-to-end tests for critical flows per [Design/PRD.md](../../Design/PRD.md) UAT verification.
 
 ## Prerequisites
 

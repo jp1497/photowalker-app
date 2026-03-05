@@ -15,10 +15,9 @@ For full details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). If you hit iss
 
 ## Design Authority
 
-- **[PRD v2](Design/PRD_v2.md)** - Product requirements, database design, API specification, infrastructure
-- **[Implementation Roadmap](Design/IMPLEMENTATION_ROADMAP.md)** - Phased implementation plan, steps, tests, UAT
+- **[Design/PRD.md](Design/PRD.md)** - Product requirements, user flows, technical specification, UAT verification (single source of truth)
 
-When implementing features, reference the roadmap step's Agent Instructions and Design Constraints. Do not add features outside the specified scope without design approval. If a technical constraint requires a design change, document the proposed change and seek approval before implementing alternatives.
+When implementing features, reference the PRD for requirements and acceptance criteria. Do not add features outside the specified scope without design approval. If a technical constraint requires a design change, document the proposed change and seek approval before implementing alternatives.
 
 ## Branching
 
@@ -68,14 +67,4 @@ Open an issue for questions, bugs, or design proposals. Reference the PRD or roa
 
 ## UAT Scenarios
 
-User acceptance scenarios are defined in the [Implementation Roadmap - UAT Master Checklist](Design/IMPLEMENTATION_ROADMAP.md#uat-master-checklist):
-
-| ID | User Story |
-|----|------------|
-| UAT-FR1 | Sign in with Google OAuth |
-| UAT-FR2 | Create a photowalk route |
-| UAT-FR3 | Upload photos and attach to routes |
-| UAT-FR4 | View a shared route |
-| UAT-FR5 | Browse public routes |
-
-Each phase's steps include UAT criteria. Verify UAT passes before marking a phase complete.
+User acceptance criteria and manual verification are defined in [Design/PRD.md - UAT Verification](Design/PRD.md#10-uat-verification). Verify UAT passes before release.

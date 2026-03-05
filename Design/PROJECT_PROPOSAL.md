@@ -1,8 +1,6 @@
 # Photowalker: Project Proposal
 
-**Version:** 1.0  
-**Date:** February 5, 2026  
-**Status:** Ready for Implementation
+> **Superseded by [PRD.md](./PRD.md)** — This document is retained for historical context. The PRD is the single source of truth.
 
 ---
 

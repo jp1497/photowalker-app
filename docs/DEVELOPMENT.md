@@ -38,7 +38,7 @@ npm install
 
 **Frontend:** Copy `frontend/.env.example` to `frontend/.env.local` and set `VITE_API_URL` (e.g. `http://localhost:8000`). The map uses [OpenFreeMap](https://openfreemap.org/) vector tiles (free, no API key required).
 
-See [Implementation Roadmap - Step 0.2](../Design/IMPLEMENTATION_ROADMAP.md#step-02-development-environment) for details.
+See the backend and frontend `.env.example` files for the full list of variables.
 
 ### 5. Start Infrastructure
 
