@@ -1,37 +1,70 @@
 # Contributing to Photowalker
 
+Thanks for your interest in contributing. This guide covers setup, workflow, and expectations.
+
+## First-Time Setup
+
+1. **Prerequisites:** Python 3.11+, Node.js 20+, Docker
+2. **Infrastructure:** `make dev-infra` (from project root)
+3. **Backend:** `cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
+4. **Frontend:** `cd frontend && npm install`
+5. **Environment:** Copy `backend/.env.example` to `backend/.env` and `frontend/.env.example` to `frontend/.env.local`; fill in required values
+6. **Run:** `make dev-backend` (terminal 1), `make dev-frontend` (terminal 2)
+
+For full details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). If you hit issues, check [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
 ## Design Authority
 
 - **[PRD v2](Design/PRD_v2.md)** - Product requirements, database design, API specification, infrastructure
 - **[Implementation Roadmap](Design/IMPLEMENTATION_ROADMAP.md)** - Phased implementation plan, steps, tests, UAT
 
-When implementing features, reference the roadmap step's Agent Instructions and Design Constraints. Do not add features outside the specified scope without design approval.
+When implementing features, reference the roadmap step's Agent Instructions and Design Constraints. Do not add features outside the specified scope without design approval. If a technical constraint requires a design change, document the proposed change and seek approval before implementing alternatives.
 
-## Development Workflow
+## Branching
 
-1. Create a branch per phase: `feat/<phase-name>` (e.g. `feat/auth`, `feat/routes`)
-2. One commit per roadmap step; message format: `type(scope): description`
-3. Submit a PR when all steps in the phase are complete and tests pass
-4. Merge `feat/<phase>` into `main` after review
+- Create a branch per phase: `feat/<phase-name>` (e.g. `feat/auth`, `feat/routes`)
+- One commit per roadmap step
+- Commit message format: `type(scope): description` (e.g. `feat(routes): add route creation endpoint`)
 
-## Local Setup
+## Pull Request Process
 
-See [README - Quick Start](README.md#quick-start) and [README - Development Environment](README.md#development-environment).
+1. Ensure all steps in the phase are complete and tests pass
+2. Submit a PR from `feat/<phase>` into `main`
+3. Include a brief description of changes and any relevant UAT IDs
+4. Respond to review feedback
+5. Merge after approval
 
-- Backend: Python 3.11+, `uvicorn app.main:app --reload`
-- Frontend: Node.js 20+, `npm run dev`
-- Infrastructure: `docker compose up -d` (Postgres, Redis, backend, worker)
+## Testing
 
-## Running Tests
+Run tests before opening a PR. Each suite covers different layers:
 
-- **Backend:** `cd backend && pytest`
-- **Frontend:** `cd frontend && npm run test`
-- **E2E:** `cd frontend && npm run test:e2e` (requires local stack: `docker compose up -d`)
+- **Backend:** `cd backend && pytest` or `make test` – unit and integration tests (requires Postgres)
+- **Frontend:** `cd frontend && npm run test` or `make test` – Vitest unit tests
+- **E2E:** `cd frontend && npm run test:e2e` or `make test-e2e` – Playwright; requires infra and backend running
+
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for full test instructions.
+
+## Code Style
+
+- **Backend:** Use Ruff/Flake8 and MyPy per project config
+- **Frontend:** Use ESLint per project config
+
+Lint and fix before committing. CI runs these checks.
+
+## Local Setup (Quick Reference)
+
+- **Backend:** `make dev-backend` or `cd backend && .venv/bin/uvicorn app.main:app --reload`
+- **Frontend:** `make dev-frontend` or `cd frontend && npm run dev`
+- **Infrastructure:** `make dev-infra` or `docker compose up -d`
 
 ## API Documentation
 
-- **Live (development):** `http://localhost:8000/docs` (Swagger), `http://localhost:8000/redoc`
-- **OpenAPI spec:** `shared/openapi.yaml` (manual reference); canonical spec at `/openapi.json` when backend runs
+- **Live (development):** http://localhost:8000/docs (Swagger), http://localhost:8000/redoc
+- **OpenAPI spec:** [shared/openapi.yaml](shared/openapi.yaml) (static reference); canonical spec at `/openapi.json` when backend runs
+
+## Getting Help
+
+Open an issue for questions, bugs, or design proposals. Reference the PRD or roadmap where relevant.
 
 ## UAT Scenarios
 
