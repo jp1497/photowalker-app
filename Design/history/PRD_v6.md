@@ -24,7 +24,7 @@
 
 ## Executive Summary
 
-This PRD defines the **application changes** required to implement the user flows in [Design/USER_FLOWS.md](./USER_FLOWS.md). Those flows specify: (1) land on browse with welcome when not signed in; (2) default browse = photos-only on the map with lightbox; (3) routes accessible via a menu bar that opens a left collapsible Explore routes panel; (4) My routes as a filter in that panel and Create route as a button in that panel; (5) route view and create route as a shared bottom drawer under the map; (6) account as a top-right circular user icon with Sign in / Settings / Sign out only.
+This PRD defines the **application changes** required to implement the user flows in [design/USER_FLOWS.md](./USER_FLOWS.md). Those flows specify: (1) land on browse with welcome when not signed in; (2) default browse = photos-only on the map with lightbox; (3) routes accessible via a menu bar that opens a left collapsible Explore routes panel; (4) My routes as a filter in that panel and Create route as a button in that panel; (5) route view and create route as a shared bottom drawer under the map; (6) account as a top-right circular user icon with Sign in / Settings / Sign out only.
 
 **Design principle:** Implement the flows in USER_FLOWS.md with shared components (bottom drawer, collapsible left panel) and layout that can later be adapted to mobile without redefining flows.
 
@@ -255,8 +255,8 @@ To implement photo pins for every photo in view, one of the following is require
 
 ## References
 
-- [Design/USER_FLOWS.md](./USER_FLOWS.md) — Source of intended user flows for this PRD.
-- [Design/PRD_v4.md](./PRD_v4.md) — Map-first frontend overhaul (layout, overlays).
-- [Design/PRD_v5.md](./PRD_v5.md) — Map basemap styling (optional context).
+- [design/USER_FLOWS.md](./USER_FLOWS.md) — Source of intended user flows for this PRD.
+- [design/PRD_v4.md](./PRD_v4.md) — Map-first frontend overhaul (layout, overlays).
+- [design/PRD_v5.md](./PRD_v5.md) — Map basemap styling (optional context).
 - [frontend/src/App.tsx](../frontend/src/App.tsx) — Current routing and MapShellLayout.
 - [frontend/src/components/common/AppMenu.tsx](../frontend/src/components/common/AppMenu.tsx) — Current menu (to be refactored into menu bar + account icon).

@@ -17,7 +17,7 @@ This roadmap defines the phased implementation of the map-first frontend overhau
 
 ## Design Authority
 
-**Primary Reference:** [Design/PRD_v4.md](./PRD_v4.md) (Map-First Frontend Overhaul)
+**Primary Reference:** [design/PRD_v4.md](./PRD_v4.md) (Map-First Frontend Overhaul)
 
 **Agent Rule:** Implement exactly what is specified in the PRD. Do NOT:
 - Add features or overlays not in the PRD

@@ -17,7 +17,7 @@ This roadmap defines the phased implementation of the map basemap styling (PRD v
 
 ## Design Authority
 
-**Primary Reference:** [Design/PRD_v5.md](./PRD_v5.md) (Map Basemap Styling)
+**Primary Reference:** [design/PRD_v5.md](./PRD_v5.md) (Map Basemap Styling)
 
 **Agent Rule:** Implement exactly what is specified in the PRD. Do NOT:
 - Add a style URL approach or PMTiles unless the PRD is updated
@@ -262,7 +262,7 @@ This roadmap defines the phased implementation of the map basemap styling (PRD v
 
 #### Agent Instructions
 
-1. Add or update documentation (README in frontend or project root, or a short Design/ or docs/ note) to cover:
+1. Add or update documentation (README in frontend or project root, or a short design/ or docs/ note) to cover:
    - The map uses the **Protomaps** vector basemap (Tile API). Style is built programmatically with `@protomaps/basemaps` and a custom Flavor for prettymaps-like colors.
    - **API key:** Set `VITE_PROTOMAPS_API_KEY` in `.env` (see `.env.example`). Get a key at [protomaps.com/account](https://protomaps.com/account). The API is free for non-commercial use; see [protomaps.com/api](https://protomaps.com/api) for usage policy.
    - **Attribution:** The map style and tiles require attribution to Protomaps and OpenStreetMap; the style builder includes this in the source attribution.

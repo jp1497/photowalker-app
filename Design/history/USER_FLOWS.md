@@ -1,9 +1,6 @@
 # Photowalker: Intended User Flows
 
-**Version:** 1.0  
-**Date:** 2026-02-21  
-**Status:** Specification for UI overhaul and future mobile capability  
-**Scope:** User flows only; implementation plan to follow.
+> **Superseded by [PRD.md](./PRD.md)** — User flows are now consolidated in the PRD. This document is retained for historical context.
 
 ---
 

@@ -1,8 +1,6 @@
-# UAT Checklist — v6 User Flows
+# UAT Checklist (Legacy)
 
-Manual verification checklist for the PRD v6 UI overhaul. Use for sign-off before release.
-
-**Reference:** [IMPLEMENTATION_ROADMAP_V6.md](./IMPLEMENTATION_ROADMAP_V6.md) Phase 8 Step 8.2.
+> **Superseded by [PRD.md](./PRD.md) Section 10 (UAT Verification)** — Use the PRD for release sign-off.
 
 | ID | Requirement | Verification | Pass |
 |----|-------------|--------------|------|
