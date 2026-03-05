@@ -21,7 +21,7 @@ This document defines a phased implementation plan for PRD v3 UX enhancements. I
 
 ## Design Authority
 
-**Primary Reference:** [Design/PRD_v3.md](./PRD_v3.md)
+**Primary Reference:** [design/PRD_v3.md](./PRD_v3.md)
 
 **Agent Rule:** The coding agent MUST implement exactly what is specified in the PRD. Do NOT:
 - Add features not in the PRD

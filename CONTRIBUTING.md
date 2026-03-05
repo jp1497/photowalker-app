@@ -15,7 +15,7 @@ For full details, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). If you hit iss
 
 ## Design Authority
 
-- **[Design/PRD.md](Design/PRD.md)** - Product requirements, user flows, technical specification, UAT verification (single source of truth)
+- **[design/PRD.md](design/PRD.md)** - Product requirements, user flows, technical specification, UAT verification (single source of truth)
 
 When implementing features, reference the PRD for requirements and acceptance criteria. Do not add features outside the specified scope without design approval. If a technical constraint requires a design change, document the proposed change and seek approval before implementing alternatives.
 
@@ -67,4 +67,4 @@ Open an issue for questions, bugs, or design proposals. Reference the PRD or roa
 
 ## UAT Scenarios
 
-User acceptance criteria and manual verification are defined in [Design/PRD.md - UAT Verification](Design/PRD.md#10-uat-verification). Verify UAT passes before release.
+User acceptance criteria and manual verification are defined in [design/PRD.md - UAT Verification](design/PRD.md#10-uat-verification). Verify UAT passes before release.

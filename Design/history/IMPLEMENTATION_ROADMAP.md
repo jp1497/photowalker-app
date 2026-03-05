@@ -21,7 +21,7 @@ This document defines a phased implementation plan for the Photowalker MVP. Each
 
 ## Design Authority
 
-**Primary Reference:** [Design/PRD_v2.md](./PRD_v2.md)
+**Primary Reference:** [design/PRD_v2.md](./PRD_v2.md)
 
 **Agent Rule:** The coding agent MUST implement exactly what is specified in the PRD. Do NOT:
 - Add features not in the PRD
@@ -67,7 +67,7 @@ This document defines a phased implementation plan for the Photowalker MVP. Each
 3. Frontend: Create `frontend/` with Vite + React + TypeScript, structure per PRD
 4. Add `__init__.py` to all Python packages
 5. Create empty `requirements.txt`, `requirements-dev.txt`, `package.json` with correct dependencies from PRD
-6. Ensure `Design/` folder exists with PRD and related docs
+6. Ensure `design/` folder exists with PRD and related docs
 7. Update root `README.md` to reference Design docs and this roadmap
 
 #### Design Constraints

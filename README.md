@@ -12,7 +12,7 @@ Photowalker solves the gap between route planning and photo sharing for photogra
 - **Core value:** Each photowalk is a "living object"—a curated route plus photos and narrative—that captures how a place looked when walked
 - **Differentiators:** Geographic focus, route-centric design, photo reuse across routes, community discovery by place
 
-See [Design/PRD.md](Design/PRD.md) for the full product specification.
+See [design/PRD.md](design/PRD.md) for the full product specification.
 
 ## Quick Start
 
@@ -35,7 +35,7 @@ photowalker-app/
 ├── backend/          # FastAPI backend (Python)
 ├── frontend/         # React frontend (TypeScript)
 ├── shared/           # Shared contracts (OpenAPI spec)
-├── Design/           # PRD (single source of truth)
+├── design/           # PRD and design history
 └── docs/             # Development, deployment, troubleshooting
 ```
 
@@ -45,7 +45,7 @@ photowalker-app/
 - [Deployment](docs/DEPLOYMENT.md) - Docker, production, migrations
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues
 - [Contributing](CONTRIBUTING.md) - Workflow, branching, PR process
-- [Design/PRD.md](Design/PRD.md) - Product Requirements Document (single source of truth)
+- [design/PRD.md](design/PRD.md) - Product Requirements Document (single source of truth)
 
 ## API
 
@@ -53,11 +53,11 @@ When the backend runs: http://localhost:8000/docs (Swagger), http://localhost:80
 
 ## Tech Stack
 
-FastAPI, PostgreSQL + PostGIS, React, TypeScript, MapLibre GL JS, AWS S3, Google OAuth. See [Design/PRD.md](Design/PRD.md) for details.
+FastAPI, PostgreSQL + PostGIS, React, TypeScript, MapLibre GL JS, AWS S3, Google OAuth. See [design/PRD.md](design/PRD.md) for details.
 
 ## Status
 
-See [Design/PRD.md](Design/PRD.md) for product scope and release verification.
+See [design/PRD.md](design/PRD.md) for product scope and release verification.
 
 ## License
 

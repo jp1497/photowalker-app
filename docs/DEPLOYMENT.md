@@ -1,6 +1,6 @@
 # Deployment
 
-Guide for deploying Photowalker using Docker. See [Design/PRD.md](../Design/PRD.md) for the product specification.
+Guide for deploying Photowalker using Docker. See [design/PRD.md](../design/PRD.md) for the product specification.
 
 ## Docker Quick Start
 

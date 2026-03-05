@@ -1,6 +1,6 @@
 # E2E Tests (Playwright)
 
-End-to-end tests for critical flows per [Design/PRD.md](../../Design/PRD.md) UAT verification.
+End-to-end tests for critical flows per [design/PRD.md](../../design/PRD.md) UAT verification.
 
 ## Prerequisites
 

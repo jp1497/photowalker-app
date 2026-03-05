@@ -477,7 +477,7 @@ photowalker-app/
 ├── backend/          # FastAPI, services, models, auth, storage
 ├── frontend/         # React, pages, components, map
 ├── shared/           # openapi.yaml
-├── Design/           # This PRD
+├── design/           # PRD (this file) and design history docs
 └── docs/             # DEVELOPMENT, DEPLOYMENT, TROUBLESHOOTING
 ```
 
