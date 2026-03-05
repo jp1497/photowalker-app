@@ -545,3 +545,53 @@ async def test_browse_photos_pagination(db_session: AsyncSession) -> None:
     all_returned_ids = [p.id for p in full_page[0]]
     for pid in our_photo_ids:
         assert pid in all_returned_ids, f"our photo {pid} must be in bbox browse result"
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_browse_my_photos_returns_only_current_user_photos_in_bbox(
+    db_session: AsyncSession,
+) -> None:
+    """browse_my_photos returns only current user's photos with location inside bbox."""
+    owner = User(google_id="myphotos1", email="my1@example.com", name="Owner")
+    other = User(google_id="myphotos2", email="my2@example.com", name="Other")
+    db_session.add_all([owner, other])
+    await db_session.flush()
+
+    owner_photo_in_bbox = Photo(
+        user_id=owner.id,
+        s3_key_original="photos/owner/inbbox/original.jpg",
+        location=WKTElement("POINT(-122.4 37.8)", srid=4326),
+        file_size_bytes=100,
+    )
+    other_photo_in_bbox = Photo(
+        user_id=other.id,
+        s3_key_original="photos/other/inbbox/original.jpg",
+        location=WKTElement("POINT(-122.4 37.8)", srid=4326),
+        file_size_bytes=100,
+    )
+    owner_photo_outside_bbox = Photo(
+        user_id=owner.id,
+        s3_key_original="photos/owner/outbbox/original.jpg",
+        location=WKTElement("POINT(-122.4 38.5)", srid=4326),
+        file_size_bytes=100,
+    )
+    db_session.add_all([owner_photo_in_bbox, other_photo_in_bbox, owner_photo_outside_bbox])
+    await db_session.flush()
+
+    bbox = (-122.42, 37.78, -122.38, 37.84)
+    photos, total, page, per_page = await photo_service.browse_my_photos(
+        db_session,
+        user_id=owner.id,
+        bbox=bbox,
+        page=1,
+        per_page=10,
+    )
+
+    assert page == 1
+    assert per_page == 10
+    assert total >= 1
+    ids = {p.id for p in photos}
+    assert owner_photo_in_bbox.id in ids
+    assert owner_photo_outside_bbox.id not in ids
+    assert other_photo_in_bbox.id not in ids

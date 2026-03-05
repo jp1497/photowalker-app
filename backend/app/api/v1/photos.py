@@ -116,6 +116,67 @@ async def browse_photos(
     }
 
 
+@router.get("/my")
+async def browse_my_photos(
+    db: AsyncSession = Depends(get_db),
+    bbox: str = Query(..., description="min_lon,min_lat,max_lon,max_lat (required)"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(20, ge=1, le=50, description="Items per page"),
+    current_user: User = Depends(get_current_user_required),
+) -> dict:
+    """Browse current user's photos in viewport (bbox) for My Photos map.
+    Returns only photos with non-null location inside bbox, regardless of route visibility.
+    Auth required. Bbox area max 200 km².
+    """
+    bbox_tuple = _parse_bbox(bbox)
+    if bbox_tuple is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "bbox must be min_lon,min_lat,max_lon,max_lat (four numbers)",
+                "details": None,
+            },
+        )
+    try:
+        photos, total, page_out, per_page_out = await photo_service.browse_my_photos(
+            db, user_id=current_user.id, bbox=bbox_tuple, page=page, per_page=per_page
+        )
+    except BboxTooLargeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "Bounding box area exceeds maximum (200 km²)",
+                "details": None,
+            },
+        )
+    items = []
+    for p in photos:
+        route_ids = [rp.route_id for rp in p.route_photos]
+        routes = [
+            PhotoBrowseRouteRef(slug=rp.route.slug, title=rp.route.title)
+            for rp in p.route_photos
+            if rp.route
+        ]
+        user = p.user
+        items.append(
+            PhotoBrowseItem(
+                id=p.id,
+                caption=p.caption,
+                user=PhotoBrowseUser(id=user.id, name=user.name),
+                route_ids=route_ids,
+                routes=routes,
+                image_url=f"/v1/photos/{p.id}/image",
+                location=p.location,
+            )
+        )
+    return {
+        "photos": [item.model_dump(mode="json") for item in items],
+        "pagination": {"page": page_out, "per_page": per_page_out, "total": total},
+    }
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def upload_photo(
     file: UploadFile = File(...),

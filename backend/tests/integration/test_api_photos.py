@@ -467,3 +467,98 @@ def test_get_v1_photos_missing_bbox_returns_400() -> None:
         assert response.json()["error"]["code"] == "VALIDATION_ERROR"
     finally:
         app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_get_v1_photos_my_returns_only_current_user_photos_in_bbox() -> None:
+    """GET /v1/photos/my?bbox=... returns only the authenticated user's photos in bbox."""
+    from unittest.mock import patch
+
+    settings = _photo_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        user1, token1 = _create_user_and_token_sync(settings)
+        user2, token2 = _create_user_and_token_sync(settings)
+        with TestClient(app) as client:
+            with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
+                with patch("app.services.photo_service.extract_captured_at", return_value=None):
+                    up1 = client.post(
+                        "/v1/photos",
+                        headers={"Authorization": f"Bearer {token1}"},
+                        files={"file": ("p1.jpg", MINIMAL_JPEG, "image/jpeg")},
+                        data={"route_ids": "[]"},
+                    )
+                    up2 = client.post(
+                        "/v1/photos",
+                        headers={"Authorization": f"Bearer {token2}"},
+                        files={"file": ("p2.jpg", MINIMAL_JPEG, "image/jpeg")},
+                        data={"route_ids": "[]"},
+                    )
+            assert up1.status_code == 201
+            assert up2.status_code == 201
+            photo1_id = up1.json()["photo"]["id"]
+            photo2_id = up2.json()["photo"]["id"]
+
+            resp = client.get(
+                "/v1/photos/my?bbox=-122.42,37.78,-122.38,37.84",
+                headers={"Authorization": f"Bearer {token1}"},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "photos" in data
+        photos = data["photos"]
+        assert len(photos) >= 1
+        ids = {p["id"] for p in photos}
+        assert photo1_id in ids
+        assert photo2_id not in ids
+        assert all(p["user"]["id"] == str(user1.id) for p in photos)
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_get_v1_photos_my_bbox_too_large_returns_400() -> None:
+    """GET /v1/photos/my?bbox=... with area > 200 km² returns 400."""
+    settings = _photo_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        user, token = _create_user_and_token_sync(settings)
+        with TestClient(app) as client:
+            resp = client.get(
+                "/v1/photos/my?bbox=-122.5,37.0,-121.5,38.0",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert resp.status_code == 400
+        body = resp.json()
+        assert body["error"]["code"] == "VALIDATION_ERROR"
+        assert "200 km²" in body["error"]["message"]
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
+
+
+@requires_postgres
+def test_get_v1_photos_my_invalid_or_missing_bbox_returns_400() -> None:
+    """GET /v1/photos/my with invalid or missing bbox returns 400."""
+    settings = _photo_settings()
+    app = create_app(settings)
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        user, token = _create_user_and_token_sync(settings)
+        with TestClient(app) as client:
+            resp_invalid = client.get(
+                "/v1/photos/my?bbox=invalid",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            resp_missing = client.get(
+                "/v1/photos/my",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert resp_invalid.status_code == 400
+        assert resp_invalid.json()["error"]["code"] == "VALIDATION_ERROR"
+        # Missing bbox is a validation error on the query param as well
+        assert resp_missing.status_code == 400
+        assert resp_missing.json()["error"]["code"] == "VALIDATION_ERROR"
+    finally:
+        app.dependency_overrides.pop(get_settings, None)

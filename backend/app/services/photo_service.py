@@ -209,6 +209,70 @@ async def browse_photos(
     return (photos, total, page, per_page)
 
 
+async def browse_my_photos(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    bbox: tuple[float, float, float, float],
+    page: int = DEFAULT_PAGE,
+    per_page: int = DEFAULT_PER_PAGE,
+) -> Tuple[List[Photo], int, int, int]:
+    """Return current user's photos with location inside bbox. Used for My Photos map.
+    bbox: (min_lon, min_lat, max_lon, max_lat). Rejected if area > 200 km².
+    Returns (photos, total, page, per_page). Photos have user and route_photos.route loaded.
+    """
+    if per_page > MAX_PER_PAGE:
+        per_page = MAX_PER_PAGE
+    if per_page < 1:
+        per_page = DEFAULT_PER_PAGE
+    if page < 1:
+        page = DEFAULT_PAGE
+
+    min_lon, min_lat, max_lon, max_lat = bbox
+    if min_lon > max_lon or min_lat > max_lat:
+        return [], 0, page, per_page
+    area_m2 = await _bbox_area_m2(db, min_lon, min_lat, max_lon, max_lat)
+    if area_m2 > MAX_BBOX_AREA_M2:
+        raise BboxTooLargeError()
+
+    envelope = func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+
+    base = (
+        select(Photo)
+        .where(
+            Photo.user_id == user_id,
+            Photo.location.isnot(None),
+            func.ST_Intersects(Photo.location, envelope),
+        )
+    )
+    count_stmt = (
+        select(func.count())
+        .select_from(Photo)
+        .where(
+            Photo.user_id == user_id,
+            Photo.location.isnot(None),
+            func.ST_Intersects(Photo.location, envelope),
+        )
+    )
+
+    total_result = await db.execute(count_stmt)
+    total = total_result.scalar_one() or 0
+
+    offset = (page - 1) * per_page
+    base = (
+        base.order_by(Photo.created_at.desc())
+        .offset(offset)
+        .limit(per_page)
+        .options(
+            selectinload(Photo.user),
+            selectinload(Photo.route_photos).selectinload(RoutePhoto.route),
+        )
+    )
+    r = await db.execute(base)
+    photos = list(r.unique().scalars().all())
+    return (photos, total, page, per_page)
+
+
 def _validate_location_coords(location_dict: dict) -> tuple[float, float]:
     """Validate GeoJSON Point coordinates. Returns (lon, lat). Raises ValueError if invalid."""
     from app.schemas.photo import _validate_geojson_point
