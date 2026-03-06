@@ -64,15 +64,27 @@ describe('photos API', () => {
     );
   });
 
-  it('getMyPhotosInBbox calls GET /v1/photos/my with bbox and pagination params', async () => {
-    vi.mocked(apiClient.get).mockResolvedValue({
-      data: { photos: [], pagination: { page: 1, per_page: 20, total: 0 } },
-    });
+  it('getMyPhotosInBbox calls GET /v1/photos/my with bbox and pagination params and returns response data', async () => {
+    const responseData = { photos: [], pagination: { page: 2, per_page: 30, total: 0 } };
+    vi.mocked(apiClient.get).mockResolvedValue({ data: responseData });
 
-    await getMyPhotosInBbox('-122.5,37.7,-122.3,37.9', 2, 30);
+    const result = await getMyPhotosInBbox('-122.5,37.7,-122.3,37.9', 2, 30);
 
     expect(apiClient.get).toHaveBeenCalledWith('/v1/photos/my', {
       params: { bbox: '-122.5,37.7,-122.3,37.9', page: 2, per_page: 30 },
+    });
+    expect(result).toEqual(responseData);
+  });
+
+  it('getMyPhotosInBbox uses default page=1 and per_page=50 when omitted', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: { photos: [], pagination: { page: 1, per_page: 50, total: 0 } },
+    });
+
+    await getMyPhotosInBbox('-122.5,37.7,-122.3,37.9');
+
+    expect(apiClient.get).toHaveBeenCalledWith('/v1/photos/my', {
+      params: { bbox: '-122.5,37.7,-122.3,37.9', page: 1, per_page: 50 },
     });
   });
 
