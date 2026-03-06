@@ -1,7 +1,7 @@
 /** Unit tests for photos API. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from './client';
-import { uploadPhoto, getPhotoImageUrl, getRoutePhotos, updatePhoto } from './photos';
+import { uploadPhoto, getPhotoImageUrl, getRoutePhotos, updatePhoto, getMyPhotosInBbox } from './photos';
 
 vi.mock('./client', () => ({
   apiClient: {
@@ -62,6 +62,18 @@ describe('photos API', () => {
       '/v1/routes/route-id/photos',
       { params: { order: 'captured_at' } }
     );
+  });
+
+  it('getMyPhotosInBbox calls GET /v1/photos/my with bbox and pagination params', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: { photos: [], pagination: { page: 1, per_page: 20, total: 0 } },
+    });
+
+    await getMyPhotosInBbox('-122.5,37.7,-122.3,37.9', 2, 30);
+
+    expect(apiClient.get).toHaveBeenCalledWith('/v1/photos/my', {
+      params: { bbox: '-122.5,37.7,-122.3,37.9', page: 2, per_page: 30 },
+    });
   });
 
   it('updatePhoto sends PATCH with location and returns photo from response', async () => {

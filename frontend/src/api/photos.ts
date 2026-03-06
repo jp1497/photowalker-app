@@ -53,6 +53,18 @@ export async function getPhotosInBbox(
   return data;
 }
 
+/** Browse current user's own photos in viewport (bbox). Auth required. */
+export async function getMyPhotosInBbox(
+  bbox: string,
+  page = 1,
+  per_page = 50
+): Promise<PhotosBrowseResponse> {
+  const { data } = await apiClient.get<PhotosBrowseResponse>('/v1/photos/my', {
+    params: { bbox, page, per_page },
+  });
+  return data;
+}
+
 /** Get photos for a route. */
 export async function getRoutePhotos(
   routeId: string,
