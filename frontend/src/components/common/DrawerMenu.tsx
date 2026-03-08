@@ -1,6 +1,7 @@
-/** Persistent nav drawer: Browse and Routes only. No menu button; rail is always visible. Translates to bottom nav on mobile. */
+/** Persistent nav drawer: Browse, Routes, and Photos (auth-gated). No menu button; rail is always visible. */
 import { useNavigate } from 'react-router-dom';
 import { useRoutesPanel } from '../../contexts/RoutesPanelContext';
+import { useAuth } from '../../hooks/useAuth';
 
 const DRAWER_PANEL_ID = 'drawer-menu-panel';
 
@@ -38,27 +39,21 @@ const itemStyle: React.CSSProperties = {
 export function DrawerMenu() {
   const navigate = useNavigate();
   const routesPanel = useRoutesPanel();
-
-  const handleBrowse = () => {
-    navigate('/browse');
-  };
-
-  const handleRoutes = () => {
-    routesPanel?.setRoutesPanelOpen(true);
-  };
+  const { isAuthenticated } = useAuth();
 
   return (
-    <nav
-      id={DRAWER_PANEL_ID}
-      aria-label="Navigation"
-      style={navStyle}
-    >
-      <button type="button" style={itemStyle} onClick={handleBrowse}>
+    <nav id={DRAWER_PANEL_ID} aria-label="Navigation" style={navStyle}>
+      <button type="button" style={itemStyle} onClick={() => { routesPanel?.setRoutesPanelOpen(false); routesPanel?.setPhotosPanelOpen(false); navigate('/browse'); }}>
         Browse
       </button>
-      <button type="button" style={itemStyle} onClick={handleRoutes}>
+      <button type="button" style={itemStyle} onClick={() => { routesPanel?.setPhotosPanelOpen(false); routesPanel?.setRoutesPanelOpen(true); }}>
         Routes
       </button>
+      {isAuthenticated && (
+        <button type="button" style={itemStyle} onClick={() => { routesPanel?.setRoutesPanelOpen(false); routesPanel?.setPhotosPanelOpen(true); }}>
+          Photos
+        </button>
+      )}
     </nav>
   );
 }

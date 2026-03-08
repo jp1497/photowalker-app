@@ -80,7 +80,9 @@ const mockRoutes: RouteType[] = [
 ];
 
 describe('Browse', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    const { useMapContext } = await import('../contexts/MapContext');
+    vi.mocked(useMapContext).mockReturnValue(null);
     vi.mocked(routesApi.getBrowseRoutes).mockReset();
     vi.mocked(routesApi.getBrowseRoutes).mockResolvedValue({
       routes: mockRoutes,
@@ -88,6 +90,11 @@ describe('Browse', () => {
     });
     vi.mocked(photosApi.getPhotosInBbox).mockReset();
     vi.mocked(photosApi.getPhotosInBbox).mockResolvedValue({
+      photos: [],
+      pagination: { page: 1, per_page: 50, total: 0 },
+    });
+    vi.mocked(photosApi.getMyPhotosInBbox).mockReset();
+    vi.mocked(photosApi.getMyPhotosInBbox).mockResolvedValue({
       photos: [],
       pagination: { page: 1, per_page: 50, total: 0 },
     });
@@ -301,6 +308,53 @@ describe('Browse', () => {
     await userEvent.click(screen.getByRole('button', { name: /open route/i }));
     await waitFor(() => {
       expect(screen.getByTestId('route-detail')).toBeTruthy();
+    });
+  });
+
+  it('does not show My photos toggle when not authenticated', async () => {
+    vi.mocked(useAuth.useAuth).mockReturnValue({
+      user: null, isAuthenticated: false, loading: false, login: vi.fn(), logout: vi.fn(),
+    });
+    render(
+      <MemoryRouter>
+        <Browse />
+      </MemoryRouter>
+    );
+    expect(screen.queryByRole('button', { name: /my photos/i })).toBeFalsy();
+  });
+
+  it('shows My photos toggle when authenticated', async () => {
+    vi.mocked(useAuth.useAuth).mockReturnValue({
+      user: { id: 'u1', email: 'a@b.co', name: 'User', avatar_url: null, created_at: '' },
+      isAuthenticated: true, loading: false, login: vi.fn(), logout: vi.fn(),
+    });
+    render(
+      <MemoryRouter>
+        <Browse />
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /my photos/i })).toBeTruthy();
+    });
+  });
+
+  it('calls getMyPhotosInBbox when My photos toggle is clicked', async () => {
+    vi.mocked(useAuth.useAuth).mockReturnValue({
+      user: { id: 'u1', email: 'a@b.co', name: 'User', avatar_url: null, created_at: '' },
+      isAuthenticated: true, loading: false, login: vi.fn(), logout: vi.fn(),
+    });
+    vi.mocked(photosApi.getMyPhotosInBbox).mockResolvedValue({
+      photos: [], pagination: { page: 1, per_page: 20, total: 0 },
+    });
+    render(
+      <MemoryRouter>
+        <Browse />
+      </MemoryRouter>
+    );
+    await waitFor(() => screen.getByRole('button', { name: /my photos/i }));
+    await userEvent.click(screen.getByRole('button', { name: /my photos/i }));
+    await waitFor(() => {
+      expect(vi.mocked(photosApi.getMyPhotosInBbox)).toHaveBeenCalled();
     });
   });
 

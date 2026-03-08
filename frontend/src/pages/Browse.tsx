@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import maplibregl from 'maplibre-gl';
 import { getBrowseRoutes } from '../api/routes';
-import { fetchPhotoImageBlob, getPhotosInBbox } from '../api/photos';
+import { fetchPhotoImageBlob, getMyPhotosInBbox, getPhotosInBbox } from '../api/photos';
 import type { PhotoBrowseItem } from '../types/photo';
 import {
   CLUSTER_MAX_ZOOM,
@@ -16,6 +16,7 @@ import { MapView } from '../components/map/MapView';
 import { RouteList } from '../components/routes/RouteList';
 import { useHighlightedRoute } from '../contexts/HighlightedRouteContext';
 import { useMapContext } from '../contexts/MapContext';
+import { useRoutesPanel } from '../contexts/RoutesPanelContext';
 import {
   browsePinIconSizeAtZoom,
   createDefaultPinImageData,
@@ -172,6 +173,7 @@ export function Browse() {
   const [mapBbox, setMapBbox] = useState<string | null>(null);
   /** Photos in viewport for browse-photos mode (GET /v1/photos?bbox=). PRD v6 Step 3.1. */
   const [browsePhotos, setBrowsePhotos] = useState<PhotoBrowseItem[]>([]);
+  const [myPhotosMode, setMyPhotosMode] = useState(false);
   const browsePhotosRef = useRef<PhotoBrowseItem[]>([]);
   const [browsePhotoThumbnailUrls, setBrowsePhotoThumbnailUrls] = useState<Record<string, string>>({});
   const browsePhotoThumbnailUrlsRef = useRef<Record<string, string>>({});
@@ -196,6 +198,9 @@ export function Browse() {
   const listOverlayRef = useRef<HTMLDivElement>(null);
 
   useFocusTrap(listOverlayRef, { active: listOverlayOpen, returnFocusRef: routesButtonRef });
+
+  const routesPanel = useRoutesPanel();
+  const photoLibraryVersion = routesPanel?.photoLibraryVersion ?? 0;
 
   const routesWithPhoto = useMemo(
     () => routes.filter((r) => r.first_photo_id),
@@ -233,6 +238,12 @@ export function Browse() {
       thumbnailUrlsRef.current = {};
     };
   }, [routesWithPhoto]);
+
+  /** When photos are successfully uploaded, switch to My Photos mode so the user sees their new photos. */
+  useEffect(() => {
+    if (photoLibraryVersion === 0) return;
+    setMyPhotosMode(true);
+  }, [photoLibraryVersion]);
 
   /** Photos to show on map: all, or only those with valid thumbnail when BROWSE_PHOTOS_HIDE_PINS_WITHOUT_THUMBNAIL. */
   const photosToShowOnMap = useMemo(() => {
@@ -297,7 +308,8 @@ export function Browse() {
   const fetchPhotosInBbox = useCallback((bbox: string) => {
     setLoading(true);
     setBboxTooLarge(false);
-    getPhotosInBbox(bbox, 1, 50)
+    const fetcher = myPhotosMode ? getMyPhotosInBbox : getPhotosInBbox;
+    fetcher(bbox, 1, 50)
       .then((res) => {
         setBrowsePhotos(res.photos);
       })
@@ -317,7 +329,7 @@ export function Browse() {
         }
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [myPhotosMode]);
 
   const fetchMap = useCallback((bbox: string) => {
     setLoading(true);
@@ -358,12 +370,12 @@ export function Browse() {
 
   useEffect(() => {
     if (viewMode !== 'map' || !debouncedMapBbox) return;
-    if (isShellMap) {
+    if (isShellMap || myPhotosMode) {
       fetchPhotosInBbox(debouncedMapBbox);
     } else {
       fetchMap(debouncedMapBbox);
     }
-  }, [viewMode, debouncedMapBbox, isShellMap, fetchPhotosInBbox, fetchMap]);
+  }, [viewMode, debouncedMapBbox, isShellMap, myPhotosMode, fetchPhotosInBbox, fetchMap, photoLibraryVersion]);
 
   useEffect(() => {
     if (viewMode === 'list') {
@@ -862,6 +874,58 @@ export function Browse() {
           onClose={() => setSelectedPhotoForLightbox(null)}
           returnFocusRef={mapFocusRef}
         />
+      )}
+      {isAuthenticated && (
+        <div
+          style={{
+            position: isShellMap ? 'absolute' : 'relative',
+            top: isShellMap ? '1rem' : undefined,
+            left: isShellMap ? '50%' : undefined,
+            transform: isShellMap ? 'translateX(-50%)' : undefined,
+            zIndex: 100,
+            display: 'flex',
+            background: '#fff',
+            borderRadius: 20,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+            overflow: 'hidden',
+            pointerEvents: 'auto',
+            marginBottom: isShellMap ? undefined : '0.5rem',
+            alignSelf: isShellMap ? undefined : 'flex-start',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setMyPhotosMode(false)}
+            aria-pressed={!myPhotosMode}
+            style={{
+              padding: '0.4rem 0.9rem',
+              border: 'none',
+              background: !myPhotosMode ? '#2563eb' : 'transparent',
+              color: !myPhotosMode ? '#fff' : '#374151',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: !myPhotosMode ? 600 : 400,
+            }}
+          >
+            All photos
+          </button>
+          <button
+            type="button"
+            onClick={() => setMyPhotosMode(true)}
+            aria-pressed={myPhotosMode}
+            style={{
+              padding: '0.4rem 0.9rem',
+              border: 'none',
+              background: myPhotosMode ? '#2563eb' : 'transparent',
+              color: myPhotosMode ? '#fff' : '#374151',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: myPhotosMode ? 600 : 400,
+            }}
+          >
+            My photos
+          </button>
+        </div>
       )}
       {isShellMap ? (
         <>
