@@ -65,7 +65,7 @@ async def browse_photos(
     per_page: int = Query(20, ge=1, le=50, description="Items per page"),
 ) -> dict:
     """Browse photos in viewport (bbox) for map pins and lightbox. PRD v6 - Step 0.1.
-    Returns only photos with non-null location inside bbox that appear on at least one public route.
+    Returns photos with non-null location inside bbox that are either on a public route or have no route.
     No auth required. Bbox area max 200 km²."""
     bbox_tuple = _parse_bbox(bbox)
     if bbox_tuple is None:
@@ -247,9 +247,12 @@ async def update_photo(
 
 
 def _can_view_photo(photo, current_user: Optional[User]) -> bool:
-    """True if current user (or anonymous) can view this photo. Photo must have route_photos and route loaded."""
+    """True if current user (or anonymous) can view this photo. Photo must have route_photos and route loaded.
+    Photos with no route associations are publicly viewable (they appear on the public map)."""
     if current_user and photo.user_id == current_user.id:
         return True
+    if not photo.route_photos:
+        return True  # No route = publicly viewable (shown on public map)
     for rp in photo.route_photos:
         if rp.route.is_public:
             return True

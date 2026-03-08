@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import text
@@ -167,28 +167,30 @@ async def browse_photos(
         raise BboxTooLargeError()
 
     envelope = func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
-    # Photos that have location in bbox and are on at least one public non-draft route
+    # Photos that have location in bbox and are either on a public non-draft route or not on any route
+    visibility_filter = or_(
+        and_(Route.is_public.is_(True), Route.is_draft.is_(False)),
+        RoutePhoto.route_id.is_(None),  # No route association (LEFT JOIN produced NULL)
+    )
     base = (
         select(Photo)
-        .join(RoutePhoto, RoutePhoto.photo_id == Photo.id)
-        .join(Route, RoutePhoto.route_id == Route.id)
+        .outerjoin(RoutePhoto, RoutePhoto.photo_id == Photo.id)
+        .outerjoin(Route, RoutePhoto.route_id == Route.id)
         .where(
-            Route.is_public.is_(True),
-            Route.is_draft.is_(False),
             Photo.location.isnot(None),
             func.ST_Intersects(Photo.location, envelope),
+            visibility_filter,
         )
         .distinct()
     )
     count_stmt = (
         select(func.count(func.distinct(Photo.id)))
-        .join(RoutePhoto, RoutePhoto.photo_id == Photo.id)
-        .join(Route, RoutePhoto.route_id == Route.id)
+        .outerjoin(RoutePhoto, RoutePhoto.photo_id == Photo.id)
+        .outerjoin(Route, RoutePhoto.route_id == Route.id)
         .where(
-            Route.is_public.is_(True),
-            Route.is_draft.is_(False),
             Photo.location.isnot(None),
             func.ST_Intersects(Photo.location, envelope),
+            visibility_filter,
         )
     )
     total_result = await db.execute(count_stmt)
