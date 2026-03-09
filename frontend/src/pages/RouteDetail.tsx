@@ -2,8 +2,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { updatePhoto } from '../api/photos';
-import { getRouteBySlug } from '../api/routes';
+import { updatePhoto, reorderRoutePhotos } from '../api/photos';
+import { getRouteBySlug, updateRoute, deleteRoute } from '../api/routes';
+import { RouteEditForm } from '../components/routes/RouteEditForm';
+import { ReorderablePhotoList } from '../components/photos/ReorderablePhotoList';
+import { toastStore } from '../store/toastStore';
+import type { RouteUpdatePayload, RouteDetailPhoto } from '../types/route';
+import type { ReorderablePhoto } from '../components/photos/ReorderablePhotoList';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { Loading } from '../components/common/Loading';
 import { useMapContext } from '../contexts/MapContext';
@@ -31,6 +36,11 @@ export function RouteDetail() {
   const [editLocationCoords, setEditLocationCoords] = useState<[number, number] | null>(null);
   const [savingLocation, setSavingLocation] = useState(false);
   const [editLocationError, setEditLocationError] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editPhotos, setEditPhotos] = useState<RouteDetailPhoto[]>([]);
   const preserveViewport = !!(location.state as { preserveViewport?: boolean })?.preserveViewport;
   const { center: mapCenter } = usePreferredMapCenter();
   const isShellMap = !!mapContext;
@@ -97,6 +107,12 @@ export function RouteDetail() {
   }, [slug]);
 
   useEffect(() => {
+    if (isEditMode && data) {
+      setEditPhotos([...data.photos]);
+    }
+  }, [isEditMode, data]);
+
+  useEffect(() => {
     if (!isShellMap) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -104,6 +120,8 @@ export function RouteDetail() {
           setEditingPhotoId(null);
           setEditLocationCoords(null);
           setEditLocationError(null);
+        } else if (isEditMode) {
+          setIsEditMode(false);
         } else {
           navigate('/browse');
         }
@@ -111,7 +129,7 @@ export function RouteDetail() {
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [isShellMap, editingPhotoId, navigate]);
+  }, [isShellMap, editingPhotoId, isEditMode, navigate]);
 
   if (!slug) {
     return (
@@ -222,6 +240,49 @@ export function RouteDetail() {
     }
   };
 
+  const handleSaveMetadata = async (patch: RouteUpdatePayload) => {
+    if (!data) return;
+    setIsSaving(true);
+    try {
+      await updateRoute(data.route.id, patch);
+      await refetch();
+      setIsEditMode(false);
+    } catch {
+      toastStore.getState().add('Failed to save changes', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleReorder = async (reordered: ReorderablePhoto[]) => {
+    if (!data) return;
+    const prev = editPhotos;
+    const reorderedFull = reordered.map(
+      (r) => editPhotos.find((p) => p.id === r.id)!
+    );
+    setEditPhotos(reorderedFull);
+    try {
+      await reorderRoutePhotos(data.route.id, reordered.map((p) => p.id));
+      void refetch();
+    } catch {
+      setEditPhotos(prev);
+      toastStore.getState().add('Failed to save photo order', 'error');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!data) return;
+    setIsDeleting(true);
+    try {
+      await deleteRoute(data.route.id);
+      navigate('/browse');
+    } catch {
+      toastStore.getState().add('Failed to delete route', 'error');
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   if (!isShellMap) {
     return (
       <div style={{ padding: '2rem' }}>
@@ -313,11 +374,33 @@ export function RouteDetail() {
             </div>
           </div>
         )}
-        <RouteView route={route} photos={photos} selectedPhotoId={selectedPhotoId} onSelectPhoto={setSelectedPhotoId} preserveViewport={isShellMap && preserveViewport} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+          <span />
+          {isOwner && !isEditMode && (
+            <button
+              type="button"
+              aria-label="Edit route"
+              onClick={() => { setIsEditMode(true); setShowUpload(false); }}
+              style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem', cursor: 'pointer' }}
+            >
+              Edit
+            </button>
+          )}
+        </div>
+        {isEditMode ? (
+          <RouteEditForm
+            route={route}
+            onSave={handleSaveMetadata}
+            onCancel={() => setIsEditMode(false)}
+            isSaving={isSaving}
+          />
+        ) : (
+          <RouteView route={route} photos={photos} selectedPhotoId={selectedPhotoId} onSelectPhoto={setSelectedPhotoId} preserveViewport={isShellMap && preserveViewport} />
+        )}
         <section style={{ marginTop: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
             <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Photos</h2>
-            {isOwner && (
+            {isOwner && !isEditMode && (
               <button
                 type="button"
                 data-testid="route-detail-add-photos"
@@ -328,7 +411,7 @@ export function RouteDetail() {
               </button>
             )}
           </div>
-          {showUpload && isOwner && (
+          {showUpload && isOwner && !isEditMode && (
             <div style={{ marginBottom: '1rem', padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8 }}>
               <PhotoUploadForm
                 routeIds={[route.id]}
@@ -339,13 +422,69 @@ export function RouteDetail() {
               />
             </div>
           )}
-          <PhotoGallery
-            photos={photos}
-            selectedPhotoId={selectedPhotoId}
-            onSelectPhoto={setSelectedPhotoId}
-            isOwner={isOwner}
-            onEditLocation={isOwner ? (photoId) => { setEditingPhotoId(photoId); setEditLocationError(null); } : undefined}
-          />
+          {isEditMode ? (
+            <ReorderablePhotoList
+              photos={editPhotos}
+              onChange={handleReorder}
+            />
+          ) : (
+            <PhotoGallery
+              photos={photos}
+              selectedPhotoId={selectedPhotoId}
+              onSelectPhoto={setSelectedPhotoId}
+              isOwner={isOwner}
+              onEditLocation={isOwner ? (photoId) => { setEditingPhotoId(photoId); setEditLocationError(null); } : undefined}
+            />
+          )}
+          {isEditMode && isOwner && (
+            <div style={{ marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
+              {!showDeleteConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                    background: '#fee2e2',
+                    color: '#b91c1c',
+                    border: '1px solid #fca5a5',
+                    borderRadius: 6,
+                  }}
+                >
+                  Delete route
+                </button>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.875rem', color: '#b91c1c' }}>Delete this route permanently?</span>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      fontSize: '0.875rem',
+                      cursor: isDeleting ? 'not-allowed' : 'pointer',
+                      background: '#b91c1c',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 6,
+                    }}
+                  >
+                    {isDeleting ? 'Deleting…' : 'Yes, delete'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={isDeleting}
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       </div>
     );
@@ -379,11 +518,33 @@ export function RouteDetail() {
           <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.875rem' }}>
             <Link to="/">Home</Link> / <Link to="/browse">Browse</Link>
           </p>
-          <RouteView route={route} photos={photos} selectedPhotoId={selectedPhotoId} onSelectPhoto={setSelectedPhotoId} contentOnly />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <span />
+            {isOwner && !isEditMode && (
+              <button
+                type="button"
+                aria-label="Edit route"
+                onClick={() => { setIsEditMode(true); setShowUpload(false); }}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem', cursor: 'pointer' }}
+              >
+                Edit
+              </button>
+            )}
+          </div>
+          {isEditMode ? (
+            <RouteEditForm
+              route={route}
+              onSave={handleSaveMetadata}
+              onCancel={() => setIsEditMode(false)}
+              isSaving={isSaving}
+            />
+          ) : (
+            <RouteView route={route} photos={photos} selectedPhotoId={selectedPhotoId} onSelectPhoto={setSelectedPhotoId} contentOnly />
+          )}
           <section style={{ marginTop: '1.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Photos</h2>
-              {isOwner && (
+              {isOwner && !isEditMode && (
                 <button
                   type="button"
                   data-testid="route-detail-add-photos"
@@ -394,7 +555,7 @@ export function RouteDetail() {
                 </button>
               )}
             </div>
-            {showUpload && isOwner && (
+            {showUpload && isOwner && !isEditMode && (
               <div style={{ marginBottom: '1rem', padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8 }}>
                 <PhotoUploadForm
                   routeIds={[route.id]}
@@ -405,13 +566,69 @@ export function RouteDetail() {
                 />
               </div>
             )}
-            <PhotoGallery
-              photos={photos}
-              selectedPhotoId={selectedPhotoId}
-              onSelectPhoto={setSelectedPhotoId}
-              isOwner={isOwner}
-              onEditLocation={isOwner ? (photoId) => { setEditingPhotoId(photoId); setEditLocationError(null); } : undefined}
-            />
+            {isEditMode ? (
+              <ReorderablePhotoList
+                photos={editPhotos}
+                onChange={handleReorder}
+              />
+            ) : (
+              <PhotoGallery
+                photos={photos}
+                selectedPhotoId={selectedPhotoId}
+                onSelectPhoto={setSelectedPhotoId}
+                isOwner={isOwner}
+                onEditLocation={isOwner ? (photoId) => { setEditingPhotoId(photoId); setEditLocationError(null); } : undefined}
+              />
+            )}
+            {isEditMode && isOwner && (
+              <div style={{ marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
+                {!showDeleteConfirm ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      fontSize: '0.875rem',
+                      cursor: 'pointer',
+                      background: '#fee2e2',
+                      color: '#b91c1c',
+                      border: '1px solid #fca5a5',
+                      borderRadius: 6,
+                    }}
+                  >
+                    Delete route
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.875rem', color: '#b91c1c' }}>Delete this route permanently?</span>
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        fontSize: '0.875rem',
+                        cursor: isDeleting ? 'not-allowed' : 'pointer',
+                        background: '#b91c1c',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 6,
+                      }}
+                    >
+                      {isDeleting ? 'Deleting…' : 'Yes, delete'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      disabled={isDeleting}
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', cursor: 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         </div>
       </BottomDrawer>
