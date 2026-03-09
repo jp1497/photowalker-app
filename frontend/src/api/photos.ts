@@ -92,3 +92,8 @@ export async function updatePhoto(photoId: string, body: PhotoUpdateBody): Promi
   );
   return data.photo;
 }
+
+/** Update display_order of photos for a route. Owner only. */
+export async function reorderRoutePhotos(routeId: string, photoIds: string[]): Promise<void> {
+  await apiClient.put(`/v1/routes/${encodeURIComponent(routeId)}/photos/order`, { photo_ids: photoIds });
+}

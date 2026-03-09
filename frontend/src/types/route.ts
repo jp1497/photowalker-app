@@ -29,6 +29,14 @@ export interface RouteFromPhotosPayload {
   slug?: string | null;
 }
 
+/** Payload for PATCH /v1/routes/{id} */
+export interface RouteUpdatePayload {
+  title?: string;
+  description?: string | null;
+  tags?: string[];
+  is_public?: boolean;
+}
+
 /** Route from API (route detail and list) */
 export interface Route {
   id: string;
