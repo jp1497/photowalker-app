@@ -2,6 +2,8 @@
 
 A web application for creating, sharing, and discovering photowalk routes with geolocated photos.
 
+![Photowalker screenshot](docs/images/browse-view.png)
+
 ## Purpose
 
 Photowalker solves the gap between route planning and photo sharing for photographers. There is no dedicated platform that combines geolocated photos, curated routes, and community discovery. Photowalker enables photographers to create routes on a map, attach photos with automatic location extraction, and share discoverable photowalks with the community.
