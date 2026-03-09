@@ -4,13 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import { MapView } from '../components/map/MapView';
 import { MapPicker } from '../components/map/MapPicker';
-import {
-  browsePinIconSizeAtZoom,
-  createDefaultPinImageData,
-  imageToPinImageData,
-  MAP_PIN_RASTER_SIZE,
-  PIN_ICON_SIZE,
-} from '../components/map/pinImageUtils';
+import { createPhotoCalloutElement, setCalloutThumbnail } from '../components/map/PhotoMarker';
 import { BottomDrawer } from '../components/common/BottomDrawer';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
@@ -29,11 +23,8 @@ const TITLE_MAX = 100;
 const MAX_TAGS = 5;
 const MAX_PHOTOS = 50;
 
-/** Same IDs as RouteView so create preview looks identical to route detail. */
 const ROUTE_SOURCE_ID = 'route-line';
 const ROUTE_LAYER_ID = 'route-line-layer';
-const PHOTOS_SOURCE_ID = 'route-photos';
-const PHOTOS_LAYER_ID = 'route-photos-layer';
 
 function getBoundsFromCoords(coords: [number, number][]): [[number, number], [number, number]] {
   if (coords.length === 0) return [[-122.42, 37.78], [-122.4, 37.8]];
@@ -52,19 +43,6 @@ function getBoundsFromCoords(coords: [number, number][]): [[number, number], [nu
   return [[minLng - pad, minLat - pad], [maxLng + pad, maxLat + pad]];
 }
 
-function buildPhotosGeoJSON(photos: Photo[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
-  const features: GeoJSON.Feature<GeoJSON.Point>[] = [];
-  for (const photo of photos) {
-    const coords = photo.location?.coordinates;
-    if (!coords || coords.length < 2) continue;
-    features.push({
-      type: 'Feature',
-      properties: { photoId: photo.id },
-      geometry: { type: 'Point', coordinates: [coords[0], coords[1]] },
-    });
-  }
-  return { type: 'FeatureCollection', features };
-}
 
 const thumbnailPlaceholderStyle: React.CSSProperties = {
   width: 48,
@@ -97,11 +75,11 @@ export function CreateRouteFromPhotos() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
+  const [mapReady, setMapReady] = useState(false);
   const placePhotoModalRef = useRef<HTMLDivElement>(null);
   const thumbnailUrlsRef = useRef<Record<string, string>>({});
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const zoomHandlerRef = useRef<(() => void) | null>(null);
-  const photoIdsOnMapRef = useRef<Set<string>>(new Set());
+  const photoMarkersRef = useRef<maplibregl.Marker[]>([]);
   thumbnailUrlsRef.current = thumbnailUrls;
   const preserveViewport = !!(location.state && typeof location.state === 'object' && 'preserveViewport' in location.state && (location.state as { preserveViewport?: boolean }).preserveViewport);
 
@@ -162,8 +140,6 @@ export function CreateRouteFromPhotos() {
     () => photos.filter((p) => (p.location?.coordinates?.length ?? 0) >= 2),
     [photos]
   );
-  photoIdsOnMapRef.current = new Set(photosWithLocation.map((p) => p.id));
-
   const handleFiles = useCallback(
     async (files: FileList | null) => {
       if (!files?.length || photos.length >= MAX_PHOTOS) return;
@@ -242,39 +218,7 @@ export function CreateRouteFromPhotos() {
     if (photoToPlace?.id === photoId) setPhotoToPlace(null);
   }, [photoToPlace?.id]);
 
-  /** Pin images at MAP_PIN_RASTER_SIZE to match route detail (thumbnail sizing). */
-  const addImagesToMap = useCallback((map: maplibregl.Map) => {
-    const defaultPin = createDefaultPinImageData(MAP_PIN_RASTER_SIZE);
-    if (!map.getStyle()) return;
-    if (!map.hasImage('default-pin')) {
-      map.addImage('default-pin', defaultPin);
-    }
-    photosWithLocation.forEach((p) => {
-      const url = thumbnailUrlsRef.current[p.id];
-      if (url) {
-        const img = new Image();
-        img.onload = () => {
-          if (!map.getStyle()) return;
-          try {
-            if (map.hasImage(p.id)) map.removeImage(p.id);
-            const pinData = imageToPinImageData(img, MAP_PIN_RASTER_SIZE);
-            map.addImage(p.id, pinData);
-          } catch {
-            /* layer/source may be gone */
-          }
-        };
-        img.src = url;
-      } else {
-        try {
-          if (!map.hasImage(p.id)) map.addImage(p.id, defaultPin);
-        } catch {
-          /* ignore */
-        }
-      }
-    });
-  }, [photosWithLocation]);
-
-  const updateMap = useCallback(
+  const updateRouteLine = useCallback(
     (map: maplibregl.Map) => {
       if (hasLine) {
         const lineGeojson: GeoJSON.Feature<GeoJSON.LineString> = {
@@ -309,75 +253,17 @@ export function CreateRouteFromPhotos() {
           /* ignore */
         }
       }
-
-      const photosGeojson = buildPhotosGeoJSON(photos);
-      if (photosWithLocation.length === 0) {
-        try {
-          if (map.getLayer(PHOTOS_LAYER_ID)) map.removeLayer(PHOTOS_LAYER_ID);
-          if (map.getSource(PHOTOS_SOURCE_ID)) map.removeSource(PHOTOS_SOURCE_ID);
-        } catch {
-          /* ignore */
-        }
-        addImagesToMap(map);
-        return;
-      }
-      if (map.getSource(PHOTOS_SOURCE_ID)) {
-        (map.getSource(PHOTOS_SOURCE_ID) as maplibregl.GeoJSONSource).setData(photosGeojson);
-        addImagesToMap(map);
-        return;
-      }
-      {
-        map.addSource(PHOTOS_SOURCE_ID, { type: 'geojson', data: photosGeojson });
-        const defaultPin = createDefaultPinImageData(MAP_PIN_RASTER_SIZE);
-        if (!map.hasImage('default-pin')) {
-          map.addImage('default-pin', defaultPin);
-        }
-        photosWithLocation.forEach((p) => {
-          if (map.hasImage(p.id)) return;
-          try {
-            map.addImage(p.id, defaultPin);
-          } catch {
-            /* ignore */
-          }
-        });
-        const iconSizeScale = (PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE) * browsePinIconSizeAtZoom(map.getZoom());
-        map.addLayer({
-          id: PHOTOS_LAYER_ID,
-          type: 'symbol',
-          source: PHOTOS_SOURCE_ID,
-          layout: {
-            'icon-image': ['coalesce', ['get', 'photoId'], 'default-pin'],
-            'icon-size': iconSizeScale,
-            'icon-allow-overlap': true,
-            'icon-ignore-placement': true,
-          },
-        });
-        const zoomHandler = () => {
-          try {
-            const zoom = map.getZoom();
-            const scale = (PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE) * browsePinIconSizeAtZoom(zoom);
-            if (map.getLayer(PHOTOS_LAYER_ID)) {
-              map.setLayoutProperty(PHOTOS_LAYER_ID, 'icon-size', scale);
-            }
-          } catch {
-            /* layer/source may be gone */
-          }
-        };
-        zoomHandlerRef.current = zoomHandler;
-        map.on('zoom', zoomHandler);
-      }
-
-      addImagesToMap(map);
     },
-    [coordinates, hasLine, photos, photosWithLocation, preserveViewport, addImagesToMap]
+    [coordinates, hasLine, preserveViewport]
   );
 
   const handleMapReady = useCallback(
     (map: maplibregl.Map) => {
       mapRef.current = map;
-      updateMap(map);
+      updateRouteLine(map);
+      setMapReady(true);
     },
-    [updateMap]
+    [updateRouteLine]
   );
 
   const mapContext = useMapContext();
@@ -387,41 +273,55 @@ export function CreateRouteFromPhotos() {
     mapContext.onMapReady(handleMapReady);
   }, [mapContext, handleMapReady]);
 
+  /** Update route line when coordinates change. */
   useEffect(() => {
     const map = mapRef.current;
-    if (map) updateMap(map);
-  }, [updateMap]);
+    if (map) updateRouteLine(map);
+  }, [updateRouteLine]);
 
+  /** Create/teardown callout markers when photos or map readiness changes. */
   useEffect(() => {
-    if (!mapContext) return;
     const map = mapRef.current;
-    if (map) addImagesToMap(map);
-  }, [thumbnailUrls, addImagesToMap, mapContext]);
+    photoMarkersRef.current.forEach((m) => { try { m.remove(); } catch { /* ignore */ } });
+    photoMarkersRef.current = [];
+    if (!mapReady || !map) return;
+    photosWithLocation.forEach((photo) => {
+      const coords = photo.location?.coordinates;
+      if (!coords || coords.length < 2) return;
+      const [lng, lat] = coords as [number, number];
+      const thumbnailUrl = thumbnailUrlsRef.current[photo.id] || undefined;
+      const el = createPhotoCalloutElement(undefined, thumbnailUrl);
+      el.dataset.photoId = photo.id;
+      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+        .setLngLat([lng, lat])
+        .addTo(map);
+      photoMarkersRef.current.push(marker);
+    });
+    return () => {
+      photoMarkersRef.current.forEach((m) => { try { m.remove(); } catch { /* ignore */ } });
+      photoMarkersRef.current = [];
+    };
+  }, [mapReady, photosWithLocation]);
+
+  /** Update callout images in-place as thumbnails arrive. */
+  useEffect(() => {
+    photoMarkersRef.current.forEach((marker) => {
+      const photoId = marker.getElement().dataset.photoId;
+      if (!photoId) return;
+      const url = thumbnailUrls[photoId];
+      if (url) setCalloutThumbnail(marker.getElement(), url);
+    });
+  }, [thumbnailUrls]);
 
   useEffect(() => {
     return () => {
+      photoMarkersRef.current.forEach((m) => { try { m.remove(); } catch { /* ignore */ } });
+      photoMarkersRef.current = [];
       const map = mapRef.current;
-      if (zoomHandlerRef.current && map) {
-        try {
-          map.off('zoom', zoomHandlerRef.current);
-        } catch {
-          /* ignore */
-        }
-        zoomHandlerRef.current = null;
-      }
       if (map) {
         try {
-          if (map.getLayer(PHOTOS_LAYER_ID)) map.removeLayer(PHOTOS_LAYER_ID);
           if (map.getLayer(ROUTE_LAYER_ID)) map.removeLayer(ROUTE_LAYER_ID);
-          if (map.getSource(PHOTOS_SOURCE_ID)) map.removeSource(PHOTOS_SOURCE_ID);
           if (map.getSource(ROUTE_SOURCE_ID)) map.removeSource(ROUTE_SOURCE_ID);
-          photoIdsOnMapRef.current.forEach((id) => {
-            try {
-              if (map.hasImage(id)) map.removeImage(id);
-            } catch {
-              /* ignore */
-            }
-          });
         } catch {
           /* defensive teardown */
         }

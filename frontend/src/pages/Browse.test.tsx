@@ -52,13 +52,21 @@ vi.mock('../components/map/MapView', () => ({
 vi.mock('../contexts/MapContext', () => ({
   useMapContext: vi.fn(() => null),
 }));
+let capturedCalloutOnClicks: Array<() => void> = [];
+vi.mock('../components/map/PhotoMarker', () => ({
+  createPhotoCalloutElement: vi.fn((onClick: () => void) => {
+    capturedCalloutOnClicks.push(onClick);
+    return document.createElement('div');
+  }),
+  setCalloutThumbnail: vi.fn(),
+}));
 vi.mock('maplibre-gl', () => ({
   default: {
     Marker: vi.fn().mockImplementation(() => ({
       setLngLat: vi.fn().mockReturnThis(),
       addTo: vi.fn().mockReturnThis(),
       remove: vi.fn(),
-      getElement: () => null,
+      getElement: () => document.createElement('div'),
     })),
   },
 }));
@@ -81,6 +89,7 @@ const mockRoutes: RouteType[] = [
 
 describe('Browse', () => {
   beforeEach(async () => {
+    capturedCalloutOnClicks = [];
     const { useMapContext } = await import('../contexts/MapContext');
     vi.mocked(useMapContext).mockReturnValue(null);
     vi.mocked(routesApi.getBrowseRoutes).mockReset();
@@ -243,7 +252,6 @@ describe('Browse', () => {
     });
     vi.mocked(photosApi.fetchPhotoImageBlob).mockResolvedValue(new Blob());
 
-    let pinClickHandler: ((e: { features?: Array<{ properties?: { photoId?: string } }> }) => void) | null = null;
     const fakeMap = {
       getBounds: () => ({
         getSouthWest: () => ({ lng: -122.5, lat: 37.7 }),
@@ -258,9 +266,7 @@ describe('Browse', () => {
       addImage: vi.fn(),
       removeSource: vi.fn(),
       removeLayer: vi.fn(),
-      on: vi.fn((ev: string, layerId: string, cb: (e: unknown) => void) => {
-        if (ev === 'click' && layerId === 'browse-photos-layer') pinClickHandler = cb as typeof pinClickHandler;
-      }),
+      on: vi.fn(),
       off: vi.fn(),
       once: vi.fn((_ev: string, cb: () => void) => {
         setTimeout(cb, 0);
@@ -284,11 +290,13 @@ describe('Browse', () => {
     await waitFor(() => {
       expect(photosApi.getPhotosInBbox).toHaveBeenCalled();
     });
+    // Wait for the callout marker onClick to be registered
     await waitFor(() => {
-      expect(pinClickHandler).not.toBeNull();
+      expect(capturedCalloutOnClicks.length).toBeGreaterThan(0);
     });
 
-    pinClickHandler!({ features: [{ properties: { photoId: 'p1', caption: 'Pin photo', userName: 'Pin user' } }] });
+    // Simulate pin click via the callout element's onClick
+    capturedCalloutOnClicks[0]();
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: /photo lightbox/i })).toBeTruthy();
     });
@@ -301,7 +309,8 @@ describe('Browse', () => {
     });
     expect(screen.queryByTestId('map-focus-return')).not.toBeNull();
 
-    pinClickHandler!({ features: [{ properties: { photoId: 'p1' } }] });
+    // Click the same pin again to re-open lightbox
+    capturedCalloutOnClicks[0]();
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: /photo lightbox/i })).toBeTruthy();
     });

@@ -1,53 +1,69 @@
-/** Unit tests for PhotoMarker: thumbnail vs blue-dot rendering. */
+/** Unit tests for PhotoMarker callout pin. */
 import { describe, expect, it, vi } from 'vitest';
-import { createPhotoMarkerElement, setMarkerThumbnail } from './PhotoMarker';
+import { createPhotoCalloutElement, setCalloutThumbnail } from './PhotoMarker';
 
-describe('createPhotoMarkerElement', () => {
-  it('without thumbnailUrl renders blue dot', () => {
-    const el = createPhotoMarkerElement();
-    expect(el.classList.contains('photo-marker-pin')).toBe(true);
-    const dot = el.querySelector('.photo-marker-pin-dot');
-    expect(dot).toBeTruthy();
+describe('createPhotoCalloutElement', () => {
+  it('renders bubble and pointer elements', () => {
+    const el = createPhotoCalloutElement();
+    expect(el.classList.contains('photo-callout')).toBe(true);
+    expect(el.querySelector('.photo-callout-bubble')).toBeTruthy();
+    expect(el.querySelector('.photo-callout-pointer')).toBeTruthy();
+  });
+
+  it('without thumbnailUrl renders no img', () => {
+    const el = createPhotoCalloutElement();
     expect(el.querySelector('img')).toBeFalsy();
   });
 
-  it('with thumbnailUrl renders img and placeholder dot', () => {
-    const el = createPhotoMarkerElement(undefined, 'https://example.com/thumb.jpg');
-    expect(el.classList.contains('photo-marker-pin')).toBe(true);
-    expect(el.querySelector('.photo-marker-pin-dot')).toBeTruthy();
-    const img = el.querySelector('img');
+  it('with thumbnailUrl renders img inside bubble', () => {
+    const el = createPhotoCalloutElement(undefined, 'https://example.com/thumb.jpg');
+    const img = el.querySelector('.photo-callout-bubble img') as HTMLImageElement | null;
     expect(img).toBeTruthy();
-    expect((img as HTMLImageElement).src).toContain('example.com/thumb.jpg');
+    expect(img!.src).toContain('example.com/thumb.jpg');
+  });
+
+  it('with thumbnailUrl img starts hidden', () => {
+    const el = createPhotoCalloutElement(undefined, 'https://example.com/thumb.jpg');
+    const img = el.querySelector('.photo-callout-bubble img') as HTMLImageElement | null;
+    expect(img!.style.opacity).toBe('0');
   });
 
   it('with onClick attaches click handler', () => {
     const onClick = vi.fn();
-    const el = createPhotoMarkerElement(onClick);
+    const el = createPhotoCalloutElement(onClick);
     el.click();
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('setMarkerThumbnail', () => {
-  it('upgrades blue-dot element to show thumbnail', () => {
-    const el = createPhotoMarkerElement();
-    expect(el.querySelector('.photo-marker-thumb')).toBeFalsy();
-    setMarkerThumbnail(el, 'https://example.com/photo.jpg');
-    const img = el.querySelector('.photo-marker-thumb');
+describe('setCalloutThumbnail', () => {
+  it('adds img to bubble when none exists', () => {
+    const el = createPhotoCalloutElement();
+    expect(el.querySelector('img')).toBeFalsy();
+    setCalloutThumbnail(el, 'https://example.com/photo.jpg');
+    const img = el.querySelector('.photo-callout-bubble img') as HTMLImageElement | null;
     expect(img).toBeTruthy();
-    expect((img as HTMLImageElement).src).toContain('example.com/photo.jpg');
+    expect(img!.src).toContain('example.com/photo.jpg');
+  });
+
+  it('added img starts hidden', () => {
+    const el = createPhotoCalloutElement();
+    setCalloutThumbnail(el, 'https://example.com/photo.jpg');
+    const img = el.querySelector('.photo-callout-bubble img') as HTMLImageElement | null;
+    expect(img!.style.opacity).toBe('0');
   });
 
   it('is no-op when thumbnailUrl is empty', () => {
-    const el = createPhotoMarkerElement();
-    setMarkerThumbnail(el, '');
-    expect(el.querySelector('.photo-marker-thumb')).toBeFalsy();
+    const el = createPhotoCalloutElement();
+    setCalloutThumbnail(el, '');
+    expect(el.querySelector('img')).toBeFalsy();
   });
 
-  it('is no-op when element already has thumbnail', () => {
-    const el = createPhotoMarkerElement(undefined, 'https://a.com/1.jpg');
-    const countBefore = el.querySelectorAll('.photo-marker-thumb').length;
-    setMarkerThumbnail(el, 'https://b.com/2.jpg');
-    expect(el.querySelectorAll('.photo-marker-thumb').length).toBe(countBefore);
+  it('is no-op when img already exists', () => {
+    const el = createPhotoCalloutElement(undefined, 'https://a.com/1.jpg');
+    setCalloutThumbnail(el, 'https://b.com/2.jpg');
+    const imgs = el.querySelectorAll('img');
+    expect(imgs.length).toBe(1);
+    expect((imgs[0] as HTMLImageElement).src).toContain('a.com/1.jpg');
   });
 });

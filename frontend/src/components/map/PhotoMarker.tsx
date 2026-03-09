@@ -1,34 +1,57 @@
-/** Pin element for a photo location on the map. Used with maplibre Marker. */
-const PIN_SIZE_PX = 24;
-const THUMB_SIZE_PX = 44;
+/** Callout pin element for a photo location on the map. Used with maplibre Marker. */
+const CALLOUT_SIZE = 60;
+const CALLOUT_POINTER_SIZE = 8;
 
-const blueDotStyle = [
-  `width: ${PIN_SIZE_PX}px; height: ${PIN_SIZE_PX}px;`,
-  'background: #2563eb; border: 2px solid #fff; border-radius: 50%;',
-  'box-shadow: 0 1px 4px rgba(0,0,0,0.3);',
+const calloutBubbleStyle = [
+  `width: ${CALLOUT_SIZE}px; height: ${CALLOUT_SIZE}px;`,
+  'background: #fff;',
+  'border-radius: 50%;',
+  'border: 2px solid #fff;',
+  'box-shadow: 0 2px 6px rgba(0,0,0,0.3);',
+  'overflow: hidden;',
 ].join(' ');
 
-function createBlueDot(): HTMLDivElement {
-  const dot = document.createElement('div');
-  dot.className = 'photo-marker-pin-dot';
-  dot.setAttribute('aria-hidden', 'true');
-  dot.style.cssText = blueDotStyle;
-  return dot;
+const calloutPointerStyle = [
+  'display: block;',
+  'width: 0; height: 0;',
+  `border-left: ${CALLOUT_POINTER_SIZE}px solid transparent;`,
+  `border-right: ${CALLOUT_POINTER_SIZE}px solid transparent;`,
+  `border-top: ${CALLOUT_POINTER_SIZE}px solid #fff;`,
+  'margin: 0 auto;',
+  'filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15));',
+].join(' ');
+
+const calloutImgStyle = [
+  `width: ${CALLOUT_SIZE}px; height: ${CALLOUT_SIZE}px;`,
+  'display: block;',
+  'object-fit: cover;',
+  'opacity: 0;',
+].join(' ');
+
+function createCalloutImg(src: string): HTMLImageElement {
+  const img = document.createElement('img');
+  img.alt = '';
+  img.style.cssText = calloutImgStyle;
+  img.src = src;
+  img.addEventListener('load', () => {
+    img.style.opacity = '1';
+  });
+  img.addEventListener('error', () => {
+    img.remove();
+  });
+  return img;
 }
 
 /**
- * Creates a DOM element for a map pin. If thumbnailUrl is provided, shows a
- * ~44px thumbnail with lazy load; placeholder blue dot until loaded; fallback
- * to blue dot on error. Otherwise shows a 24px blue dot.
+ * Creates a callout-bubble DOM element for a photo map pin.
+ * The bottom tip of the pointer aligns with the GPS coordinate (use MapLibre anchor: 'bottom').
+ * If thumbnailUrl is provided, renders the image at its natural aspect ratio.
+ * Otherwise renders an empty white box placeholder.
  */
-export function createPhotoMarkerElement(onClick?: () => void, thumbnailUrl?: string): HTMLElement {
+export function createPhotoCalloutElement(onClick?: () => void, thumbnailUrl?: string): HTMLElement {
   const el = document.createElement('div');
-  el.className = 'photo-marker-pin';
-  el.setAttribute('aria-hidden', 'true');
-  el.style.cssText = [
-    'position: relative; display: flex; align-items: center; justify-content: center;',
-    'cursor: pointer;',
-  ].join(' ');
+  el.className = 'photo-callout';
+  el.style.cssText = 'cursor: pointer; display: flex; flex-direction: column; align-items: center;';
 
   if (onClick) {
     el.addEventListener('click', (e) => {
@@ -37,74 +60,31 @@ export function createPhotoMarkerElement(onClick?: () => void, thumbnailUrl?: st
     });
   }
 
-  if (!thumbnailUrl) {
-    const dot = createBlueDot();
-    el.style.width = `${PIN_SIZE_PX}px`;
-    el.style.height = `${PIN_SIZE_PX}px`;
-    el.appendChild(dot);
-    return el;
+  const bubble = document.createElement('div');
+  bubble.className = 'photo-callout-bubble';
+  bubble.style.cssText = calloutBubbleStyle;
+
+  if (thumbnailUrl) {
+    bubble.appendChild(createCalloutImg(thumbnailUrl));
   }
 
-  el.style.width = `${THUMB_SIZE_PX}px`;
-  el.style.height = `${THUMB_SIZE_PX}px`;
+  const pointer = document.createElement('div');
+  pointer.className = 'photo-callout-pointer';
+  pointer.style.cssText = calloutPointerStyle;
 
-  const placeholder = createBlueDot();
-  placeholder.style.position = 'absolute';
-  el.appendChild(placeholder);
-
-  const img = document.createElement('img');
-  img.alt = '';
-  img.className = 'photo-marker-thumb';
-  img.style.cssText = [
-    `width: ${THUMB_SIZE_PX}px; height: ${THUMB_SIZE_PX}px;`,
-    'object-fit: cover; border: 2px solid #fff; border-radius: 50%;',
-    'box-shadow: 0 1px 4px rgba(0,0,0,0.3);',
-    'position: absolute; opacity: 0;',
-  ].join(' ');
-  img.src = thumbnailUrl;
-  img.addEventListener('load', () => {
-    placeholder.style.opacity = '0';
-    img.style.opacity = '1';
-  });
-  img.addEventListener('error', () => {
-    img.remove();
-    placeholder.style.opacity = '1';
-  });
-  el.appendChild(img);
-
+  el.appendChild(bubble);
+  el.appendChild(pointer);
   return el;
 }
 
 /**
- * Upgrades an existing blue-dot marker element to show a thumbnail.
- * No-op if element already has a thumbnail or thumbnailUrl is empty.
+ * Sets the thumbnail image on an existing callout element.
+ * No-op if thumbnailUrl is empty or an image already exists.
  */
-export function setMarkerThumbnail(el: HTMLElement, thumbnailUrl: string): void {
-  if (!thumbnailUrl || el.querySelector('.photo-marker-thumb')) return;
-  const dot = el.querySelector('.photo-marker-pin-dot');
-  if (!dot) return;
+export function setCalloutThumbnail(el: HTMLElement, thumbnailUrl: string): void {
+  if (!thumbnailUrl) return;
+  const bubble = el.querySelector('.photo-callout-bubble');
+  if (!bubble || bubble.querySelector('img')) return;
 
-  el.style.width = `${THUMB_SIZE_PX}px`;
-  el.style.height = `${THUMB_SIZE_PX}px`;
-  (dot as HTMLElement).style.position = 'absolute';
-
-  const img = document.createElement('img');
-  img.alt = '';
-  img.className = 'photo-marker-thumb';
-  img.style.cssText = [
-    `width: ${THUMB_SIZE_PX}px; height: ${THUMB_SIZE_PX}px;`,
-    'object-fit: cover; border: 2px solid #fff; border-radius: 50%;',
-    'box-shadow: 0 1px 4px rgba(0,0,0,0.3);',
-    'position: absolute; opacity: 0;',
-  ].join(' ');
-  img.src = thumbnailUrl;
-  img.addEventListener('load', () => {
-    (dot as HTMLElement).style.opacity = '0';
-    img.style.opacity = '1';
-  });
-  img.addEventListener('error', () => {
-    img.remove();
-    (dot as HTMLElement).style.opacity = '1';
-  });
-  el.appendChild(img);
+  bubble.appendChild(createCalloutImg(thumbnailUrl));
 }

@@ -1,7 +1,7 @@
 /**
  * Map layer for the route highlighted from the Explore panel (PRD v6 Step 4.3).
- * Renders photo pins with thumbnails and zoom-size behaviour matching the browse layer,
- * with a defined golden border. When highlightedRouteSlug is null, removes the layer.
+ * Renders photo callout pins with a blue outline. When highlightedRouteSlug is null,
+ * removes the markers.
  */
 import { useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
@@ -9,46 +9,14 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import { fetchPhotoImageBlob } from '../../api/photos';
 import { getRouteBySlug } from '../../api/routes';
 import { useMapContext } from '../../contexts/MapContext';
-import {
-  browsePinIconSizeAtZoom,
-  createDefaultPinImageData,
-  imageToPinImageData,
-  MAP_PIN_RASTER_SIZE,
-  PIN_ICON_SIZE,
-} from './pinImageUtils';
-import type { RouteDetailPhoto } from '../../types/route';
+import { createPhotoCalloutElement, setCalloutThumbnail } from './PhotoMarker';
 
-const HIGHLIGHTED_SOURCE_ID = 'highlighted-route-source';
-const HIGHLIGHTED_LAYER_ID = 'highlighted-route-layer';
-const HIGHLIGHTED_DEFAULT_IMAGE_ID = 'highlighted-default-pin';
-const HIGHLIGHTED_PIN_PREFIX = 'highlighted-pin-';
-
-/** Blue border for highlighted route pins (matches app primary blue, more defined than browse white border). */
-const HIGHLIGHTED_BORDER = { strokeStyle: '#2563eb', lineWidth: 8 };
-
-function buildHighlightedPhotosGeoJSON(
-  photos: RouteDetailPhoto[]
-): GeoJSON.FeatureCollection<GeoJSON.Point> {
-  const features: GeoJSON.Feature<GeoJSON.Point>[] = [];
-  for (const photo of photos) {
-    const coords = photo.location?.coordinates;
-    if (!coords || coords.length < 2) continue;
-    features.push({
-      type: 'Feature',
-      properties: {
-        photoId: photo.id,
-        imageId: HIGHLIGHTED_PIN_PREFIX + photo.id,
-      },
-      geometry: { type: 'Point', coordinates: [coords[0], coords[1]] },
-    });
-  }
-  return { type: 'FeatureCollection', features };
-}
+const HIGHLIGHTED_BUBBLE_STYLE = 'outline: 2px solid #2563eb; outline-offset: 2px;';
 
 export interface HighlightedRouteLayerProps {
-  /** Route slug to highlight; null clears the layer. */
+  /** Route slug to highlight; null clears the markers. */
   highlightedRouteSlug: string | null;
-  /** Called when the highlighted layer is added (true) or removed (false). Browse fades only when true to avoid a visible gap. */
+  /** Called when highlighted markers are added (true) or removed (false). */
   onHighlightedLayerReadyChange?: (ready: boolean) => void;
 }
 
@@ -57,42 +25,24 @@ export function HighlightedRouteLayer({
   onHighlightedLayerReadyChange,
 }: HighlightedRouteLayerProps) {
   const mapContext = useMapContext();
-  const layerAddedRef = useRef(false);
   const currentSlugRef = useRef<string | null>(null);
   const cancelledRef = useRef(false);
-  const zoomHandlerRef = useRef<(() => void) | null>(null);
+  const photoMarkersRef = useRef<maplibregl.Marker[]>([]);
   const objectUrlsRef = useRef<Record<string, string>>({});
-  const imageIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     currentSlugRef.current = highlightedRouteSlug;
   }, [highlightedRouteSlug]);
 
-  const removeLayer = useCallback(
+  const removeMarkers = useCallback(
     (map: MapLibreMap) => {
-      try {
-        onHighlightedLayerReadyChange?.(false);
-        if (zoomHandlerRef.current) {
-          map.off('zoom', zoomHandlerRef.current);
-          zoomHandlerRef.current = null;
-        }
-        imageIdsRef.current.forEach((id) => {
-          try {
-            if (map.hasImage(id)) map.removeImage(id);
-          } catch {
-            /* ignore */
-          }
-        });
-      imageIdsRef.current = [];
+      onHighlightedLayerReadyChange?.(false);
+      photoMarkersRef.current.forEach((m) => { try { m.remove(); } catch { /* ignore */ } });
+      photoMarkersRef.current = [];
       Object.values(objectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
       objectUrlsRef.current = {};
-      if (map.getLayer(HIGHLIGHTED_LAYER_ID)) map.removeLayer(HIGHLIGHTED_LAYER_ID);
-      if (map.getSource(HIGHLIGHTED_SOURCE_ID)) map.removeSource(HIGHLIGHTED_SOURCE_ID);
-    } catch {
-      /* ignore */
-    }
-    layerAddedRef.current = false;
-  },
+      void map; // map not needed but kept for consistent API
+    },
     [onHighlightedLayerReadyChange]
   );
 
@@ -101,7 +51,7 @@ export function HighlightedRouteLayer({
 
     const setupOrUpdate = (map: MapLibreMap) => {
       if (!highlightedRouteSlug) {
-        removeLayer(map);
+        removeMarkers(map);
         return;
       }
 
@@ -112,123 +62,65 @@ export function HighlightedRouteLayer({
           const photosWithLocation = res.photos.filter(
             (p) => (p.location?.coordinates?.length ?? 0) >= 2
           );
+
+          // Teardown previous markers before building new ones
+          photoMarkersRef.current.forEach((m) => { try { m.remove(); } catch { /* ignore */ } });
+          photoMarkersRef.current = [];
+          Object.values(objectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+          objectUrlsRef.current = {};
+
           if (photosWithLocation.length === 0) {
-            removeLayer(map);
+            onHighlightedLayerReadyChange?.(false);
             return;
-          }
-          const geojson = buildHighlightedPhotosGeoJSON(photosWithLocation);
-
-          const defaultPin = createDefaultPinImageData(MAP_PIN_RASTER_SIZE, HIGHLIGHTED_BORDER);
-          if (!map.hasImage(HIGHLIGHTED_DEFAULT_IMAGE_ID)) {
-            map.addImage(HIGHLIGHTED_DEFAULT_IMAGE_ID, defaultPin);
-            imageIdsRef.current.push(HIGHLIGHTED_DEFAULT_IMAGE_ID);
-          }
-
-          if (!map.getSource(HIGHLIGHTED_SOURCE_ID)) {
-            map.addSource(HIGHLIGHTED_SOURCE_ID, { type: 'geojson', data: geojson });
-
-            photosWithLocation.forEach((p) => {
-              const id = HIGHLIGHTED_PIN_PREFIX + p.id;
-              try {
-                if (!map.hasImage(id)) {
-                  map.addImage(id, defaultPin);
-                  imageIdsRef.current.push(id);
-                }
-              } catch {
-                /* ignore */
-              }
-            });
-
-            const baseSize = PIN_ICON_SIZE / MAP_PIN_RASTER_SIZE;
-            const updateIconSize = () => {
-              try {
-                if (map.getLayer(HIGHLIGHTED_LAYER_ID)) {
-                  const zoom = map.getZoom();
-                  map.setLayoutProperty(
-                    HIGHLIGHTED_LAYER_ID,
-                    'icon-size',
-                    baseSize * browsePinIconSizeAtZoom(zoom)
-                  );
-                }
-              } catch {
-                /* layer/source may be gone */
-              }
-            };
-
-            map.addLayer({
-              id: HIGHLIGHTED_LAYER_ID,
-              type: 'symbol',
-              source: HIGHLIGHTED_SOURCE_ID,
-              layout: {
-                'icon-image': ['coalesce', ['get', 'imageId'], HIGHLIGHTED_DEFAULT_IMAGE_ID],
-                'icon-size': baseSize * browsePinIconSizeAtZoom(map.getZoom()),
-                'icon-allow-overlap': true,
-                'icon-ignore-placement': true,
-              },
-            });
-            zoomHandlerRef.current = updateIconSize;
-            map.on('zoom', updateIconSize);
-            updateIconSize();
-            layerAddedRef.current = true;
-            onHighlightedLayerReadyChange?.(true);
-          } else {
-            (map.getSource(HIGHLIGHTED_SOURCE_ID) as maplibregl.GeoJSONSource).setData(geojson);
-            photosWithLocation.forEach((p) => {
-              const id = HIGHLIGHTED_PIN_PREFIX + p.id;
-              if (!map.hasImage(id)) {
-                try {
-                  map.addImage(id, defaultPin);
-                  imageIdsRef.current.push(id);
-                } catch {
-                  /* ignore */
-                }
-              }
-            });
           }
 
           photosWithLocation.forEach((p) => {
-            const id = HIGHLIGHTED_PIN_PREFIX + p.id;
-            let cancelled = false;
+            const coords = p.location?.coordinates;
+            if (!coords || coords.length < 2) return;
+            const [lng, lat] = coords as [number, number];
+            const el = createPhotoCalloutElement();
+            el.dataset.photoId = p.id;
+            // Apply blue outline to visually distinguish highlighted pins
+            const bubble = el.querySelector('.photo-callout-bubble') as HTMLElement | null;
+            if (bubble) bubble.style.cssText += HIGHLIGHTED_BUBBLE_STYLE;
+            const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+              .setLngLat([lng, lat])
+              .addTo(map);
+            photoMarkersRef.current.push(marker);
+          });
+
+          onHighlightedLayerReadyChange?.(true);
+
+          // Fetch thumbnails and update markers in-place
+          photosWithLocation.forEach((p) => {
             fetchPhotoImageBlob(p.id, 'thumbnail')
               .then((blob) => {
-                if (cancelled || currentSlugRef.current !== requestedSlug) return;
+                if (cancelledRef.current || currentSlugRef.current !== requestedSlug) return;
                 const url = URL.createObjectURL(blob);
                 objectUrlsRef.current[p.id] = url;
-                const img = new Image();
-                img.onload = () => {
-                  if (cancelled || currentSlugRef.current !== requestedSlug) return;
-                  try {
-                    if (!map.getStyle()) return;
-                    if (map.hasImage(id)) map.removeImage(id);
-                    const pinData = imageToPinImageData(img, MAP_PIN_RASTER_SIZE, HIGHLIGHTED_BORDER);
-                    map.addImage(id, pinData);
-                  } catch {
-                    /* layer/source may be gone */
-                  }
-                };
-                img.src = url;
+                const marker = photoMarkersRef.current.find(
+                  (m) => m.getElement().dataset.photoId === p.id
+                );
+                if (marker) setCalloutThumbnail(marker.getElement(), url);
               })
               .catch(() => {
-                /* keep default pin */
+                /* keep empty placeholder */
               });
-            return () => {
-              cancelled = true;
-            };
           });
         })
         .catch(() => {
-          removeLayer(map);
+          removeMarkers(map);
         });
     };
 
     const cleanup = (map: MapLibreMap) => {
-      removeLayer(map);
+      removeMarkers(map);
     };
 
     if (mapContext.map) {
       cancelledRef.current = false;
       if (!highlightedRouteSlug) {
-        removeLayer(mapContext.map);
+        removeMarkers(mapContext.map);
       } else {
         setupOrUpdate(mapContext.map);
       }
@@ -247,7 +139,7 @@ export function HighlightedRouteLayer({
       cancelledRef.current = true;
       if (mapContext.map) cleanup(mapContext.map);
     };
-  }, [mapContext, highlightedRouteSlug, removeLayer, onHighlightedLayerReadyChange]);
+  }, [mapContext, highlightedRouteSlug, removeMarkers, onHighlightedLayerReadyChange]);
 
   return null;
 }
