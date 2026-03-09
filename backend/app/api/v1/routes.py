@@ -13,7 +13,7 @@ from app.core.exceptions import RouteForbiddenError, RouteNotFoundError
 from app.db.dependencies import get_db
 from app.models.user import User
 from app.schemas.photo import PhotoResponse
-from app.schemas.route import RouteCreate, RouteFromPhotosCreate, RouteResponse, RouteUpdate
+from app.schemas.route import RouteCreate, RouteFromPhotosCreate, RoutePhotoOrder, RouteResponse, RouteUpdate
 from app.services import photo_service, route_service
 
 router = APIRouter(prefix="/v1/routes", tags=["routes"])
@@ -139,6 +139,34 @@ async def get_route_by_slug(
                 },
             )
     return _route_to_response(route)
+
+
+@router.put("/{route_id}/photos/order", status_code=status.HTTP_204_NO_CONTENT)
+async def reorder_route_photos(
+    route_id: UUID,
+    body: RoutePhotoOrder,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_required),
+) -> None:
+    """Update photo display_order for a route. Owner only."""
+    try:
+        await route_service.reorder_route_photos(db, route_id, current_user.id, body.photo_ids)
+    except RouteNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Route not found", "details": None},
+        )
+    except RouteForbiddenError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "FORBIDDEN", "message": "Not allowed to reorder photos on this route", "details": None},
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "VALIDATION_ERROR", "message": str(e), "details": None},
+        )
+    await db.commit()
 
 
 @router.patch("/{route_id}")
