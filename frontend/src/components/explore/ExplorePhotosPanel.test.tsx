@@ -20,7 +20,14 @@ describe('ExplorePhotosPanel', () => {
       login: vi.fn(),
       logout: vi.fn(),
     });
-    vi.mocked(useMapContext).mockReturnValue({ map: null, onMapReady: vi.fn() });
+    vi.mocked(useMapContext).mockReturnValue({
+      map: {
+        getBounds: () => ({ getWest: () => -122.5, getSouth: () => 37.5, getEast: () => -122.0, getNorth: () => 38.0 }),
+        on: vi.fn(),
+        off: vi.fn(),
+      } as any,
+      onMapReady: vi.fn(),
+    });
     vi.mocked(photosApi.getMyPhotosInBbox).mockResolvedValue({
       photos: [],
       pagination: { page: 1, per_page: 20, total: 0 },
