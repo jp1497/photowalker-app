@@ -10,7 +10,7 @@ help:
 	@echo "  make dev-backend  Start backend with uvicorn (requires dev-infra)"
 	@echo "  make dev-frontend Start frontend dev server"
 	@echo "  make dev          Start infra, then backend and frontend (run in separate terminals)"
-	@echo "  make test         Run backend + frontend unit tests"
+	@echo "  make test         Run backend + frontend lint and unit tests"
 	@echo "  make test-e2e     Run E2E tests (requires infra + backend running)"
 	@echo "  make down         Stop Docker stack"
 	@echo "  make migrate      Run database migrations"
@@ -34,8 +34,12 @@ dev: dev-infra
 	@echo "  make dev-frontend"
 
 test:
+	@echo "Running backend lint..."
+	cd backend && .venv/bin/ruff check app tests
 	@echo "Running backend tests..."
 	cd backend && pytest --tb=short -q || true
+	@echo "Running frontend lint..."
+	cd frontend && npm run lint
 	@echo "Running frontend tests..."
 	cd frontend && npm run test
 
