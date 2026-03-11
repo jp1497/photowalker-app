@@ -81,7 +81,7 @@ export function ExplorePhotosPanel({ open, onClose, onUpload }: ExplorePhotosPan
   const [photos, setPhotos] = useState<PhotoBrowseItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
-  const [bbox, setBbox] = useState<string | null>(null);
+  const [mapVersion, setMapVersion] = useState(0);
 
   const getBboxFromMap = useCallback((): string | null => {
     if (!map) return null;
@@ -89,33 +89,30 @@ export function ExplorePhotosPanel({ open, onClose, onUpload }: ExplorePhotosPan
     return `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
   }, [map]);
 
-  // Set bbox from current map viewport when panel opens
-  useEffect(() => {
-    if (!open) return;
-    setBbox(getBboxFromMap());
-  }, [open, getBboxFromMap]);
-
-  // Track map movement to update bbox
+  // Track map movement - setState called from event handler, not effect body
   useEffect(() => {
     if (!map) return;
-    const onMoveEnd = () => setBbox(getBboxFromMap());
+    const onMoveEnd = () => setMapVersion(v => v + 1);
     map.on('moveend', onMoveEnd);
     return () => { map.off('moveend', onMoveEnd); };
-  }, [map, getBboxFromMap]);
+  }, [map]);
 
-  const fetchPhotos = useCallback(() => {
-    if (!bbox) return;
-    setLoading(true);
-    getMyPhotosInBbox(bbox, 1, PER_PAGE)
-      .then((res) => setPhotos(res.photos))
-      .catch(() => setPhotos([]))
-      .finally(() => setLoading(false));
-  }, [bbox]);
-
+  // Fetch photos when panel opens, map moves, or library updates
   useEffect(() => {
-    if (!open || !bbox) return;
-    fetchPhotos();
-  }, [open, fetchPhotos, photoLibraryVersion]);
+    if (!open) return;
+    const bbox = getBboxFromMap();
+    if (!bbox) return;
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      setLoading(true);
+      getMyPhotosInBbox(bbox, 1, PER_PAGE)
+        .then((res) => { if (!cancelled) setPhotos(res.photos); })
+        .catch(() => { if (!cancelled) setPhotos([]); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    });
+    return () => { cancelled = true; };
+  }, [open, getBboxFromMap, mapVersion, photoLibraryVersion]);
 
   useEffect(() => {
     if (photos.length === 0) return;

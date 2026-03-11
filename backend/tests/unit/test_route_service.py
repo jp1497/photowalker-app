@@ -8,9 +8,8 @@ import pytest
 from geoalchemy2.elements import WKTElement
 from geoalchemy2.shape import to_shape
 from shapely.geometry import mapping
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import RouteForbiddenError, RouteNotFoundError
 from app.models.photo import Photo

@@ -1,5 +1,5 @@
 /** Browse: map with photo pins (bbox fetch) or legacy list view. PRD v6 Step 3.1: browse-photos mode. */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import maplibregl from 'maplibre-gl';

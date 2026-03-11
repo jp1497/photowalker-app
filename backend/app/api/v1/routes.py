@@ -13,7 +13,13 @@ from app.core.exceptions import RouteForbiddenError, RouteNotFoundError
 from app.db.dependencies import get_db
 from app.models.user import User
 from app.schemas.photo import PhotoResponse
-from app.schemas.route import RouteCreate, RouteFromPhotosCreate, RoutePhotoOrder, RouteResponse, RouteUpdate
+from app.schemas.route import (
+    RouteCreate,
+    RouteFromPhotosCreate,
+    RoutePhotoOrder,
+    RouteResponse,
+    RouteUpdate,
+)
 from app.services import photo_service, route_service
 
 router = APIRouter(prefix="/v1/routes", tags=["routes"])

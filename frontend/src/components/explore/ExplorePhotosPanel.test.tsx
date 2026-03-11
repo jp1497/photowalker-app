@@ -25,7 +25,7 @@ describe('ExplorePhotosPanel', () => {
         getBounds: () => ({ getWest: () => -122.5, getSouth: () => 37.5, getEast: () => -122.0, getNorth: () => 38.0 }),
         on: vi.fn(),
         off: vi.fn(),
-      } as any,
+      } as unknown as import('maplibre-gl').Map,
       onMapReady: vi.fn(),
     });
     vi.mocked(photosApi.getMyPhotosInBbox).mockResolvedValue({
