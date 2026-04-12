@@ -53,6 +53,18 @@ export async function getPhotosInBbox(
   return data;
 }
 
+/** Browse current user's own photos in viewport (bbox). Auth required. */
+export async function getMyPhotosInBbox(
+  bbox: string,
+  page = 1,
+  per_page = 50
+): Promise<PhotosBrowseResponse> {
+  const { data } = await apiClient.get<PhotosBrowseResponse>('/v1/photos/my', {
+    params: { bbox, page, per_page },
+  });
+  return data;
+}
+
 /** Get photos for a route. */
 export async function getRoutePhotos(
   routeId: string,
@@ -79,4 +91,9 @@ export async function updatePhoto(photoId: string, body: PhotoUpdateBody): Promi
     body
   );
   return data.photo;
+}
+
+/** Update display_order of photos for a route. Owner only. */
+export async function reorderRoutePhotos(routeId: string, photoIds: string[]): Promise<void> {
+  await apiClient.put(`/v1/routes/${encodeURIComponent(routeId)}/photos/order`, { photo_ids: photoIds });
 }

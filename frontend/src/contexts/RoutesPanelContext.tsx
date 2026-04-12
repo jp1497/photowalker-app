@@ -1,9 +1,16 @@
-/** Context for left Explore routes panel open state. Drawer menu opens it. */
-import { createContext, useContext, useState, type ReactNode } from 'react';
+/** Context for nav panel open states: routes panel, photos panel, upload drawer. */
+import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 
 export interface RoutesPanelContextValue {
   routesPanelOpen: boolean;
   setRoutesPanelOpen: (open: boolean) => void;
+  photosPanelOpen: boolean;
+  setPhotosPanelOpen: (open: boolean) => void;
+  uploadDrawerOpen: boolean;
+  setUploadDrawerOpen: (open: boolean) => void;
+  /** Increments each time photos are successfully uploaded. Browse watches this to re-fetch. */
+  photoLibraryVersion: number;
+  bumpPhotoLibraryVersion: () => void;
 }
 
 const RoutesPanelContext = createContext<RoutesPanelContextValue | null>(null);
@@ -19,8 +26,23 @@ export interface RoutesPanelProviderProps {
 
 export function RoutesPanelProvider({ children }: RoutesPanelProviderProps) {
   const [routesPanelOpen, setRoutesPanelOpen] = useState(false);
+  const [photosPanelOpen, setPhotosPanelOpen] = useState(false);
+  const [uploadDrawerOpen, setUploadDrawerOpen] = useState(false);
+  const [photoLibraryVersion, setPhotoLibraryVersion] = useState(0);
+  const bumpPhotoLibraryVersion = useCallback(() => setPhotoLibraryVersion((v) => v + 1), []);
   return (
-    <RoutesPanelContext.Provider value={{ routesPanelOpen, setRoutesPanelOpen }}>
+    <RoutesPanelContext.Provider
+      value={{
+        routesPanelOpen,
+        setRoutesPanelOpen,
+        photosPanelOpen,
+        setPhotosPanelOpen,
+        uploadDrawerOpen,
+        setUploadDrawerOpen,
+        photoLibraryVersion,
+        bumpPhotoLibraryVersion,
+      }}
+    >
       {children}
     </RoutesPanelContext.Provider>
   );

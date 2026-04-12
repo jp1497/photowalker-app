@@ -1,6 +1,7 @@
-"""Integration tests for discovery API (GET /v1/routes browse). Step 5.2."""
+"""Integration tests for discovery API (GET /v1/routes browse)."""
+from __future__ import annotations
+
 import asyncio
-from typing import List, Optional
 from uuid import uuid4
 
 from starlette.testclient import TestClient
@@ -11,6 +12,10 @@ from app.db.session import create_engine, create_session_factory
 from app.models.user import User
 from app.services.auth_service import issue_tokens
 from tests.conftest import _minimal_settings, requires_postgres
+from tests.integration.helpers import create_route_sync as _create_route_sync
+
+# Coordinates inside a small bbox (~20 km²) used by bbox tests.
+_ROUTE_COORDS = [[-122.4, 37.8], [-122.38, 37.82]]
 
 
 async def _create_user_and_token(settings: Settings) -> tuple[User, str]:
@@ -43,23 +48,6 @@ def _create_user_and_token_sync(settings: Settings) -> tuple[User, str]:
     return asyncio.run(_create_user_and_token(settings))
 
 
-def _public_route_payload(slug: str = "browse-route", tags: Optional[List[str]] = None) -> dict:
-    """Payload for a public route with geometry inside a small bbox (~20 km²)."""
-    if tags is None:
-        tags = ["urban"]
-    return {
-        "title": "Browse Test Route",
-        "description": "For discovery tests",
-        "route_geometry": {
-            "type": "LineString",
-            "coordinates": [[-122.4, 37.8], [-122.38, 37.82]],
-        },
-        "slug": slug,
-        "tags": tags,
-        "is_public": True,
-    }
-
-
 @requires_postgres
 def test_get_v1_routes_browse_returns_routes_and_pagination() -> None:
     """GET /v1/routes returns {routes, pagination}. No auth required."""
@@ -69,13 +57,11 @@ def test_get_v1_routes_browse_returns_routes_and_pagination() -> None:
     slug = f"browse-route-{uuid4().hex[:8]}"
     try:
         user, token = _create_user_and_token_sync(settings)
+        _create_route_sync(
+            settings, user.id,
+            slug=slug, tags=["urban"], is_public=True, coordinates=_ROUTE_COORDS,
+        )
         with TestClient(app) as client:
-            resp = client.post(
-                "/v1/routes",
-                headers={"Authorization": f"Bearer {token}"},
-                json=_public_route_payload(slug=slug),
-            )
-            assert resp.status_code in (200, 201)
             response = client.get(f"/v1/routes?author_id={user.id}")
         assert response.status_code == 200
         data = response.json()
@@ -106,13 +92,11 @@ def test_get_v1_routes_with_bbox_returns_routes_in_area() -> None:
     slug = f"inside-bbox-{uuid4().hex[:8]}"
     try:
         user, token = _create_user_and_token_sync(settings)
+        _create_route_sync(
+            settings, user.id,
+            slug=slug, is_public=True, coordinates=_ROUTE_COORDS,
+        )
         with TestClient(app) as client:
-            resp = client.post(
-                "/v1/routes",
-                headers={"Authorization": f"Bearer {token}"},
-                json=_public_route_payload(slug=slug),
-            )
-            assert resp.status_code in (200, 201)
             # Bbox ~20 km² that contains the route at (-122.4,37.8)-(-122.38,37.82)
             response = client.get(
                 f"/v1/routes?bbox=-122.42,37.78,-122.38,37.84&author_id={user.id}"
@@ -129,20 +113,18 @@ def test_get_v1_routes_with_bbox_returns_routes_in_area() -> None:
 
 @requires_postgres
 def test_get_v1_routes_with_tags_returns_routes_with_tag() -> None:
-    """GET /v1/routes?tags=urban returns routes that have the tag (UAT-FR5.2)."""
+    """GET /v1/routes?tags=urban returns routes that have the tag."""
     settings = _minimal_settings()
     app = create_app(settings)
     app.dependency_overrides[get_settings] = lambda: settings
     slug = f"urban-route-{uuid4().hex[:8]}"
     try:
         user, token = _create_user_and_token_sync(settings)
+        _create_route_sync(
+            settings, user.id,
+            slug=slug, tags=["urban"], is_public=True, coordinates=_ROUTE_COORDS,
+        )
         with TestClient(app) as client:
-            resp = client.post(
-                "/v1/routes",
-                headers={"Authorization": f"Bearer {token}"},
-                json=_public_route_payload(slug=slug, tags=["urban"]),
-            )
-            assert resp.status_code in (200, 201)
             response = client.get(f"/v1/routes?tags=urban&author_id={user.id}")
         assert response.status_code == 200
         data = response.json()

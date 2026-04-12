@@ -92,6 +92,12 @@ class RouteUpdate(BaseModel):
         return out[:MAX_TAGS]
 
 
+class RoutePhotoOrder(BaseModel):
+    """Request body for PUT /v1/routes/{route_id}/photos/order."""
+
+    photo_ids: list[UUID] = Field(..., description="Ordered photo UUIDs for this route")
+
+
 class RouteResponse(BaseModel):
     """Route response with GeoJSON geometry."""
 

@@ -18,6 +18,9 @@ import { Login } from './pages/Login';
 import { NotFound } from './pages/NotFound';
 import { RouteDetail } from './pages/RouteDetail';
 import { Settings } from './pages/Settings';
+import { ExplorePhotosPanel } from './components/explore/ExplorePhotosPanel';
+import { BulkPhotoUpload } from './components/photos/BulkPhotoUpload';
+import { BottomDrawer } from './components/common/BottomDrawer';
 import './App.css';
 
 function MapShellLayout() {
@@ -71,6 +74,23 @@ function MapShellLayout() {
     [navigate, routesPanel]
   );
 
+  const handleOpenUpload = useCallback(() => {
+    routesPanel?.setPhotosPanelOpen(false);
+    routesPanel?.setUploadDrawerOpen(true);
+  }, [routesPanel]);
+
+  const handleCloseUpload = useCallback(() => {
+    routesPanel?.setUploadDrawerOpen(false);
+    routesPanel?.setPhotosPanelOpen(true);
+  }, [routesPanel]);
+
+  /** Called when upload completes successfully (Done button). Bumps library version so Browse map re-fetches. */
+  const handleUploadDone = useCallback(() => {
+    routesPanel?.setUploadDrawerOpen(false);
+    routesPanel?.setPhotosPanelOpen(true);
+    routesPanel?.bumpPhotoLibraryVersion();
+  }, [routesPanel]);
+
   /** When panel closes, clear highlight and URL. Defer setState to avoid synchronous setState in effect. */
   useEffect(() => {
     if (!routesPanel?.routesPanelOpen) {
@@ -111,6 +131,21 @@ function MapShellLayout() {
             onRouteSelect={handleRouteSelect}
           />
         )}
+        {routesPanel?.photosPanelOpen && (
+          <ExplorePhotosPanel
+            open
+            onClose={() => routesPanel.setPhotosPanelOpen(false)}
+            onUpload={handleOpenUpload}
+          />
+        )}
+        <BottomDrawer
+          open={!!routesPanel?.uploadDrawerOpen}
+          onClose={handleCloseUpload}
+          title="Upload photos"
+          initialExpanded
+        >
+          <BulkPhotoUpload onDone={handleUploadDone} />
+        </BottomDrawer>
       </MapShell>
     </HighlightedRouteContext.Provider>
   );

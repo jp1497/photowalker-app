@@ -159,32 +159,6 @@ paths:
       responses:
         "200":
           description: Paginated routes
-    post:
-      tags: [routes]
-      summary: Create route (auth required)
-      security: [{ bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [title, coordinates]
-              properties:
-                title: { type: string }
-                description: { type: string }
-                tags: { type: array, items: { type: string } }
-                slug: { type: string }
-                coordinates:
-                  type: array
-                  items: { type: array, items: { type: number } }
-      responses:
-        "201":
-          description: Route created
-        "400":
-          description: Validation error
-        "401":
-          description: Unauthorized
 
   /v1/routes/me:
     get:
@@ -233,6 +207,39 @@ paths:
           description: Route not found
         "403":
           description: Private route, not owner
+
+  /v1/routes/{route_id}/photos/order:
+    put:
+      tags: [routes]
+      summary: Reorder photos in a route (owner only)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: route_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [photo_ids]
+              properties:
+                photo_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Order updated
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Route not found
 
   /v1/routes/{route_id}:
     parameters:

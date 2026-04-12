@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import text
@@ -167,30 +167,96 @@ async def browse_photos(
         raise BboxTooLargeError()
 
     envelope = func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
-    # Photos that have location in bbox and are on at least one public non-draft route
+    # Photos that have location in bbox and are either on a public non-draft route or not on any route
+    visibility_filter = or_(
+        and_(Route.is_public.is_(True), Route.is_draft.is_(False)),
+        RoutePhoto.route_id.is_(None),  # No route association (LEFT JOIN produced NULL)
+    )
     base = (
         select(Photo)
-        .join(RoutePhoto, RoutePhoto.photo_id == Photo.id)
-        .join(Route, RoutePhoto.route_id == Route.id)
+        .outerjoin(RoutePhoto, RoutePhoto.photo_id == Photo.id)
+        .outerjoin(Route, RoutePhoto.route_id == Route.id)
         .where(
-            Route.is_public.is_(True),
-            Route.is_draft.is_(False),
             Photo.location.isnot(None),
             func.ST_Intersects(Photo.location, envelope),
+            visibility_filter,
         )
         .distinct()
     )
     count_stmt = (
         select(func.count(func.distinct(Photo.id)))
-        .join(RoutePhoto, RoutePhoto.photo_id == Photo.id)
-        .join(Route, RoutePhoto.route_id == Route.id)
+        .outerjoin(RoutePhoto, RoutePhoto.photo_id == Photo.id)
+        .outerjoin(Route, RoutePhoto.route_id == Route.id)
         .where(
-            Route.is_public.is_(True),
-            Route.is_draft.is_(False),
+            Photo.location.isnot(None),
+            func.ST_Intersects(Photo.location, envelope),
+            visibility_filter,
+        )
+    )
+    total_result = await db.execute(count_stmt)
+    total = total_result.scalar_one() or 0
+
+    offset = (page - 1) * per_page
+    base = (
+        base.order_by(Photo.created_at.desc())
+        .offset(offset)
+        .limit(per_page)
+        .options(
+            selectinload(Photo.user),
+            selectinload(Photo.route_photos).selectinload(RoutePhoto.route),
+        )
+    )
+    r = await db.execute(base)
+    photos = list(r.unique().scalars().all())
+    return (photos, total, page, per_page)
+
+
+async def browse_my_photos(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    bbox: tuple[float, float, float, float],
+    page: int = DEFAULT_PAGE,
+    per_page: int = DEFAULT_PER_PAGE,
+) -> Tuple[List[Photo], int, int, int]:
+    """Return current user's photos with location inside bbox. Used for My Photos map.
+    bbox: (min_lon, min_lat, max_lon, max_lat). Rejected if area > 200 km².
+    Returns (photos, total, page, per_page). Photos have user and route_photos.route loaded.
+    """
+    if per_page > MAX_PER_PAGE:
+        per_page = MAX_PER_PAGE
+    if per_page < 1:
+        per_page = DEFAULT_PER_PAGE
+    if page < 1:
+        page = DEFAULT_PAGE
+
+    min_lon, min_lat, max_lon, max_lat = bbox
+    if min_lon > max_lon or min_lat > max_lat:
+        return [], 0, page, per_page
+    area_m2 = await _bbox_area_m2(db, min_lon, min_lat, max_lon, max_lat)
+    if area_m2 > MAX_BBOX_AREA_M2:
+        raise BboxTooLargeError()
+
+    envelope = func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+
+    base = (
+        select(Photo)
+        .where(
+            Photo.user_id == user_id,
             Photo.location.isnot(None),
             func.ST_Intersects(Photo.location, envelope),
         )
     )
+    count_stmt = (
+        select(func.count())
+        .select_from(Photo)
+        .where(
+            Photo.user_id == user_id,
+            Photo.location.isnot(None),
+            func.ST_Intersects(Photo.location, envelope),
+        )
+    )
+
     total_result = await db.execute(count_stmt)
     total = total_result.scalar_one() or 0
 

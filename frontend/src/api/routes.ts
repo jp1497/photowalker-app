@@ -7,6 +7,7 @@ import type {
   RouteCreatePayload,
   RouteDetailResponse,
   RouteFromPhotosPayload,
+  RouteUpdatePayload,
 } from '../types/route';
 
 export async function createRoute(payload: RouteCreatePayload): Promise<{ route: Route }> {
@@ -29,4 +30,13 @@ export async function getRouteBySlug(slug: string): Promise<RouteDetailResponse>
 export async function getBrowseRoutes(params: BrowseParams = {}): Promise<BrowseResponse> {
   const { data } = await apiClient.get<BrowseResponse>('/v1/routes', { params });
   return data;
+}
+
+export async function updateRoute(routeId: string, payload: RouteUpdatePayload): Promise<Route> {
+  const { data } = await apiClient.patch<{ route: Route }>(`/v1/routes/${encodeURIComponent(routeId)}`, payload);
+  return data.route;
+}
+
+export async function deleteRoute(routeId: string): Promise<void> {
+  await apiClient.delete(`/v1/routes/${encodeURIComponent(routeId)}`);
 }

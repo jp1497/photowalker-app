@@ -65,7 +65,7 @@ async def browse_photos(
     per_page: int = Query(20, ge=1, le=50, description="Items per page"),
 ) -> dict:
     """Browse photos in viewport (bbox) for map pins and lightbox. PRD v6 - Step 0.1.
-    Returns only photos with non-null location inside bbox that appear on at least one public route.
+    Returns photos with non-null location inside bbox that are either on a public route or have no route.
     No auth required. Bbox area max 200 km²."""
     bbox_tuple = _parse_bbox(bbox)
     if bbox_tuple is None:
@@ -80,6 +80,67 @@ async def browse_photos(
     try:
         photos, total, page_out, per_page_out = await photo_service.browse_photos(
             db, bbox=bbox_tuple, page=page, per_page=per_page
+        )
+    except BboxTooLargeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "Bounding box area exceeds maximum (200 km²)",
+                "details": None,
+            },
+        )
+    items = []
+    for p in photos:
+        route_ids = [rp.route_id for rp in p.route_photos]
+        routes = [
+            PhotoBrowseRouteRef(slug=rp.route.slug, title=rp.route.title)
+            for rp in p.route_photos
+            if rp.route
+        ]
+        user = p.user
+        items.append(
+            PhotoBrowseItem(
+                id=p.id,
+                caption=p.caption,
+                user=PhotoBrowseUser(id=user.id, name=user.name),
+                route_ids=route_ids,
+                routes=routes,
+                image_url=f"/v1/photos/{p.id}/image",
+                location=p.location,
+            )
+        )
+    return {
+        "photos": [item.model_dump(mode="json") for item in items],
+        "pagination": {"page": page_out, "per_page": per_page_out, "total": total},
+    }
+
+
+@router.get("/my")
+async def browse_my_photos(
+    db: AsyncSession = Depends(get_db),
+    bbox: str = Query(..., description="min_lon,min_lat,max_lon,max_lat (required)"),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(20, ge=1, le=50, description="Items per page"),
+    current_user: User = Depends(get_current_user_required),
+) -> dict:
+    """Browse current user's photos in viewport (bbox) for My Photos map.
+    Returns only photos with non-null location inside bbox, regardless of route visibility.
+    Auth required. Bbox area max 200 km².
+    """
+    bbox_tuple = _parse_bbox(bbox)
+    if bbox_tuple is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "bbox must be min_lon,min_lat,max_lon,max_lat (four numbers)",
+                "details": None,
+            },
+        )
+    try:
+        photos, total, page_out, per_page_out = await photo_service.browse_my_photos(
+            db, user_id=current_user.id, bbox=bbox_tuple, page=page, per_page=per_page
         )
     except BboxTooLargeError:
         raise HTTPException(
@@ -186,9 +247,12 @@ async def update_photo(
 
 
 def _can_view_photo(photo, current_user: Optional[User]) -> bool:
-    """True if current user (or anonymous) can view this photo. Photo must have route_photos and route loaded."""
+    """True if current user (or anonymous) can view this photo. Photo must have route_photos and route loaded.
+    Photos with no route associations are publicly viewable (they appear on the public map)."""
     if current_user and photo.user_id == current_user.id:
         return True
+    if not photo.route_photos:
+        return True  # No route = publicly viewable (shown on public map)
     for rp in photo.route_photos:
         if rp.route.is_public:
             return True

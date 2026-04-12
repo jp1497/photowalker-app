@@ -8,10 +8,12 @@ import pytest
 from geoalchemy2.elements import WKTElement
 from geoalchemy2.shape import to_shape
 from shapely.geometry import mapping
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import RouteForbiddenError, RouteNotFoundError
 from app.models.photo import Photo
+from app.models.route_photo import RoutePhoto
 from app.models.user import User
 from app.schemas.route import RouteCreate, RouteFromPhotosCreate, RouteGeometrySchema, RouteUpdate
 from app.services import route_service
@@ -373,3 +375,75 @@ async def test_recompute_route_geometry_from_photos_returns_none_for_invalid_rou
     """recompute_route_geometry_from_photos returns None when route does not exist."""
     result = await route_service.recompute_route_geometry_from_photos(db_session, uuid4())
     assert result is None
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_reorder_route_photos_updates_display_order(db_session: AsyncSession) -> None:
+    """reorder_route_photos sets display_order to match supplied photo_ids list."""
+    user = User(google_id="g_reorder", email="reorder@example.com", name="Reorder User")
+    db_session.add(user)
+    await db_session.flush()
+
+    p1 = _photo_with_location(user.id, -122.4, 37.8, "reorder/p1.jpg")
+    p2 = _photo_with_location(user.id, -122.41, 37.81, "reorder/p2.jpg")
+    db_session.add_all([p1, p2])
+    await db_session.flush()
+
+    data = RouteFromPhotosCreate(
+        title="Reorder Route",
+        description=None,
+        tags=[],
+        is_public=False,
+        photo_ids=[p1.id, p2.id],
+        slug=None,
+    )
+    route = await route_service.create_route_from_photos(db_session, user.id, data)
+
+    # Reorder to p2 first, p1 second
+    await route_service.reorder_route_photos(db_session, route.id, user.id, [p2.id, p1.id])
+
+    rps = (await db_session.execute(
+        select(RoutePhoto)
+        .where(RoutePhoto.route_id == route.id)
+        .order_by(RoutePhoto.display_order)
+    )).scalars().all()
+    assert rps[0].photo_id == p2.id
+    assert rps[1].photo_id == p1.id
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_reorder_route_photos_raises_if_not_owner(db_session: AsyncSession) -> None:
+    """reorder_route_photos raises RouteForbiddenError when caller is not owner."""
+    user = User(google_id="g_reorder_own", email="reorder_own@example.com", name="Owner")
+    other = User(google_id="g_reorder_oth", email="reorder_oth@example.com", name="Other")
+    db_session.add_all([user, other])
+    await db_session.flush()
+
+    data = RouteCreate(
+        title="Another Route",
+        description=None,
+        route_geometry=RouteGeometrySchema(
+            type="LineString",
+            coordinates=[[-122.4, 37.8], [-122.41, 37.81]],
+        ),
+        slug=None,
+        tags=[],
+        is_public=False,
+    )
+    route = await route_service.create_route(db_session, user.id, data)
+
+    with pytest.raises(RouteForbiddenError):
+        await route_service.reorder_route_photos(db_session, route.id, other.id, [])
+
+
+@requires_postgres
+@pytest.mark.asyncio
+async def test_reorder_route_photos_raises_not_found_for_invalid_route_id(db_session: AsyncSession) -> None:
+    """reorder_route_photos raises RouteNotFoundError when route does not exist."""
+    user = User(google_id="g_reorder_nf", email="reorder_nf@example.com", name="Not Found User")
+    db_session.add(user)
+    await db_session.flush()
+    with pytest.raises(RouteNotFoundError):
+        await route_service.reorder_route_photos(db_session, uuid4(), user.id, [])

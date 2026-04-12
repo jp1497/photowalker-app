@@ -249,6 +249,36 @@ async def delete_route(db: AsyncSession, route_id: UUID, user_id: UUID) -> None:
     await db.flush()
 
 
+async def reorder_route_photos(
+    db: AsyncSession,
+    route_id: UUID,
+    user_id: UUID,
+    photo_ids: list[UUID],
+) -> None:
+    """Update display_order of route photos to match photo_ids order.
+
+    Raises RouteNotFoundError if route not found, RouteForbiddenError if not owner.
+    Only updates RoutePhoto rows whose photo_id is in photo_ids.
+    Calls recompute_route_geometry_from_photos after reordering.
+    """
+    route = await get_route_by_id(db, route_id)
+    if route is None:
+        raise RouteNotFoundError()
+    if route.user_id != user_id:
+        raise RouteForbiddenError()
+
+    existing_photo_ids = {rp.photo_id for rp in route.route_photos}
+    if existing_photo_ids != set(photo_ids):
+        raise ValueError("photo_ids must include all photos on the route")
+
+    id_to_order = {photo_id: i for i, photo_id in enumerate(photo_ids)}
+    for rp in route.route_photos:
+        if rp.photo_id in id_to_order:
+            rp.display_order = id_to_order[rp.photo_id]
+    await db.flush()
+    await recompute_route_geometry_from_photos(db, route_id)
+
+
 async def recompute_route_geometry_from_photos(db: AsyncSession, route_id: UUID) -> Route | None:
     """Recompute route geometry from photo locations in display_order. PRD v3 - FR-R2.
 
