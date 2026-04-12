@@ -1,8 +1,9 @@
-"""Integration tests for photo API endpoints. Step 4.4 - Definition of Done."""
+"""Integration tests for photo API endpoints."""
+from __future__ import annotations
+
 import asyncio
 import os
 import tempfile
-from typing import Any
 from uuid import uuid4
 
 from starlette.testclient import TestClient
@@ -13,6 +14,7 @@ from app.db.session import create_engine, create_session_factory
 from app.models.user import User
 from app.services.auth_service import issue_tokens
 from tests.conftest import requires_postgres
+from tests.integration.helpers import create_route_sync as _create_route_sync
 
 # Minimal JPEG (no EXIF GPS) - for 400 tests
 MINIMAL_JPEG = b"\xff\xd8\xff\xd9"
@@ -65,19 +67,6 @@ def _photo_settings() -> Settings:
     )
 
 
-def _valid_route_payload() -> dict[str, Any]:
-    return {
-        "title": "Photo Route",
-        "description": None,
-        "route_geometry": {
-            "type": "LineString",
-            "coordinates": [[-122.4, 37.8], [-122.41, 37.81]],
-        },
-        "tags": [],
-        "is_public": True,
-    }
-
-
 @requires_postgres
 def test_post_photos_with_valid_jpeg_gps_returns_201() -> None:
     """POST /v1/photos with valid JPEG + GPS (mocked) returns 201."""
@@ -87,21 +76,15 @@ def test_post_photos_with_valid_jpeg_gps_returns_201() -> None:
     app.dependency_overrides[get_settings] = lambda: settings
     try:
         user, token = _create_user_and_token_sync(settings)
+        route = _create_route_sync(settings, user.id, title="Photo Route")
         with TestClient(app) as client:
-            create_resp = client.post(
-                "/v1/routes",
-                headers={"Authorization": f"Bearer {token}"},
-                json=_valid_route_payload(),
-            )
-            assert create_resp.status_code == 201
-            route_id = create_resp.json()["route"]["id"]
             with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
                 with patch("app.services.photo_service.extract_captured_at", return_value=None):
                     upload_resp = client.post(
                         "/v1/photos",
                         headers={"Authorization": f"Bearer {token}"},
                         files={"file": ("photo.jpg", MINIMAL_JPEG, "image/jpeg")},
-                        data={"caption": "Test", "route_ids": f'["{route_id}"]'},
+                        data={"caption": "Test", "route_ids": f'["{route.id}"]'},
                     )
         assert upload_resp.status_code == 201
         data = upload_resp.json()
@@ -117,25 +100,19 @@ def test_post_photos_with_valid_jpeg_gps_returns_201() -> None:
 
 @requires_postgres
 def test_post_photos_with_jpeg_without_gps_returns_201_with_null_location() -> None:
-    """POST /v1/photos with JPEG without GPS returns 201, photo with location=null (PRD v3 FR-R3)."""
+    """POST /v1/photos with JPEG without GPS returns 201, photo with location=null (FR-R3)."""
     settings = _photo_settings()
     app = create_app(settings)
     app.dependency_overrides[get_settings] = lambda: settings
     try:
         user, token = _create_user_and_token_sync(settings)
+        route = _create_route_sync(settings, user.id, title="Photo Route")
         with TestClient(app) as client:
-            create_resp = client.post(
-                "/v1/routes",
-                headers={"Authorization": f"Bearer {token}"},
-                json=_valid_route_payload(),
-            )
-            assert create_resp.status_code == 201
-            route_id = create_resp.json()["route"]["id"]
             upload_resp = client.post(
                 "/v1/photos",
                 headers={"Authorization": f"Bearer {token}"},
                 files={"file": ("photo.jpg", MINIMAL_JPEG, "image/jpeg")},
-                data={"route_ids": f'["{route_id}"]'},
+                data={"route_ids": f'["{route.id}"]'},
             )
         assert upload_resp.status_code == 201
         data = upload_resp.json()
@@ -176,23 +153,17 @@ def test_get_routes_route_id_photos_returns_photos() -> None:
     app.dependency_overrides[get_settings] = lambda: settings
     try:
         user, token = _create_user_and_token_sync(settings)
+        route = _create_route_sync(settings, user.id, title="Photo Route")
         with TestClient(app) as client:
-            create_resp = client.post(
-                "/v1/routes",
-                headers={"Authorization": f"Bearer {token}"},
-                json=_valid_route_payload(),
-            )
-            assert create_resp.status_code == 201
-            route_id = create_resp.json()["route"]["id"]
             with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
                 with patch("app.services.photo_service.extract_captured_at", return_value=None):
                     client.post(
                         "/v1/photos",
                         headers={"Authorization": f"Bearer {token}"},
                         files={"file": ("p.jpg", MINIMAL_JPEG, "image/jpeg")},
-                        data={"route_ids": f'["{route_id}"]'},
+                        data={"route_ids": f'["{route.id}"]'},
                     )
-            get_resp = client.get(f"/v1/routes/{route_id}/photos")
+            get_resp = client.get(f"/v1/routes/{route.id}/photos")
         assert get_resp.status_code == 200
         data = get_resp.json()
         assert "photos" in data
@@ -212,21 +183,15 @@ def test_patch_photos_enforces_ownership() -> None:
     try:
         user1, token1 = _create_user_and_token_sync(settings)
         user2, token2 = _create_user_and_token_sync(settings)
+        route = _create_route_sync(settings, user1.id, title="Photo Route")
         with TestClient(app) as client:
-            create_resp = client.post(
-                "/v1/routes",
-                headers={"Authorization": f"Bearer {token1}"},
-                json=_valid_route_payload(),
-            )
-            assert create_resp.status_code == 201
-            route_id = create_resp.json()["route"]["id"]
             with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
                 with patch("app.services.photo_service.extract_captured_at", return_value=None):
                     up = client.post(
                         "/v1/photos",
                         headers={"Authorization": f"Bearer {token1}"},
                         files={"file": ("p.jpg", MINIMAL_JPEG, "image/jpeg")},
-                        data={"route_ids": f'["{route_id}"]'},
+                        data={"route_ids": f'["{route.id}"]'},
                     )
             assert up.status_code == 201
             photo_id = up.json()["photo"]["id"]
@@ -243,28 +208,22 @@ def test_patch_photos_enforces_ownership() -> None:
 
 @requires_postgres
 def test_patch_photos_with_location_updates_and_returns_photo() -> None:
-    """PATCH /v1/photos/{id} with location updates and returns photo (PRD v3 FR-R3)."""
+    """PATCH /v1/photos/{id} with location updates and returns photo (FR-R3)."""
     from unittest.mock import patch
     settings = _photo_settings()
     app = create_app(settings)
     app.dependency_overrides[get_settings] = lambda: settings
     try:
         user, token = _create_user_and_token_sync(settings)
+        route = _create_route_sync(settings, user.id, title="Photo Route")
         with TestClient(app) as client:
-            create_resp = client.post(
-                "/v1/routes",
-                headers={"Authorization": f"Bearer {token}"},
-                json=_valid_route_payload(),
-            )
-            assert create_resp.status_code == 201
-            route_id = create_resp.json()["route"]["id"]
             with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
                 with patch("app.services.photo_service.extract_captured_at", return_value=None):
                     up = client.post(
                         "/v1/photos",
                         headers={"Authorization": f"Bearer {token}"},
                         files={"file": ("p.jpg", MINIMAL_JPEG, "image/jpeg")},
-                        data={"route_ids": f'["{route_id}"]'},
+                        data={"route_ids": f'["{route.id}"]'},
                     )
             assert up.status_code == 201
             photo_id = up.json()["photo"]["id"]
@@ -293,21 +252,15 @@ def test_patch_photos_with_invalid_location_returns_400() -> None:
     app.dependency_overrides[get_settings] = lambda: settings
     try:
         user, token = _create_user_and_token_sync(settings)
+        route = _create_route_sync(settings, user.id, title="Photo Route")
         with TestClient(app) as client:
-            create_resp = client.post(
-                "/v1/routes",
-                headers={"Authorization": f"Bearer {token}"},
-                json=_valid_route_payload(),
-            )
-            assert create_resp.status_code == 201
-            route_id = create_resp.json()["route"]["id"]
             with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
                 with patch("app.services.photo_service.extract_captured_at", return_value=None):
                     up = client.post(
                         "/v1/photos",
                         headers={"Authorization": f"Bearer {token}"},
                         files={"file": ("p.jpg", MINIMAL_JPEG, "image/jpeg")},
-                        data={"route_ids": f'["{route_id}"]'},
+                        data={"route_ids": f'["{route.id}"]'},
                     )
             assert up.status_code == 201
             photo_id = up.json()["photo"]["id"]
@@ -333,21 +286,15 @@ def test_delete_photos_enforces_ownership() -> None:
     try:
         user1, token1 = _create_user_and_token_sync(settings)
         user2, token2 = _create_user_and_token_sync(settings)
+        route = _create_route_sync(settings, user1.id, title="Photo Route")
         with TestClient(app) as client:
-            create_resp = client.post(
-                "/v1/routes",
-                headers={"Authorization": f"Bearer {token1}"},
-                json=_valid_route_payload(),
-            )
-            assert create_resp.status_code == 201
-            route_id = create_resp.json()["route"]["id"]
             with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
                 with patch("app.services.photo_service.extract_captured_at", return_value=None):
                     up = client.post(
                         "/v1/photos",
                         headers={"Authorization": f"Bearer {token1}"},
                         files={"file": ("p.jpg", MINIMAL_JPEG, "image/jpeg")},
-                        data={"route_ids": f'["{route_id}"]'},
+                        data={"route_ids": f'["{route.id}"]'},
                     )
             assert up.status_code == 201
             photo_id = up.json()["photo"]["id"]
@@ -361,7 +308,7 @@ def test_delete_photos_enforces_ownership() -> None:
         app.dependency_overrides.pop(get_settings, None)
 
 
-# --- GET /v1/photos (photos-in-bbox). PRD v6 - Step 0.1 ---
+# --- GET /v1/photos (photos-in-bbox) ---
 
 
 @requires_postgres
@@ -373,21 +320,15 @@ def test_get_v1_photos_with_bbox_returns_photos_and_pagination() -> None:
     app.dependency_overrides[get_settings] = lambda: settings
     try:
         user, token = _create_user_and_token_sync(settings)
+        route = _create_route_sync(settings, user.id, title="Photo Route", is_public=True)
         with TestClient(app) as client:
-            create_resp = client.post(
-                "/v1/routes",
-                headers={"Authorization": f"Bearer {token}"},
-                json=_valid_route_payload(),
-            )
-            assert create_resp.status_code == 201
-            route_id = create_resp.json()["route"]["id"]
             with patch("app.services.photo_service.extract_gps", return_value=(37.8, -122.4)):
                 with patch("app.services.photo_service.extract_captured_at", return_value=None):
                     upload_resp = client.post(
                         "/v1/photos",
                         headers={"Authorization": f"Bearer {token}"},
                         files={"file": ("photo.jpg", MINIMAL_JPEG, "image/jpeg")},
-                        data={"caption": "Bbox photo", "route_ids": f'["{route_id}"]'},
+                        data={"caption": "Bbox photo", "route_ids": f'["{route.id}"]'},
                     )
             assert upload_resp.status_code == 201
             response = client.get(
@@ -410,7 +351,7 @@ def test_get_v1_photos_with_bbox_returns_photos_and_pagination() -> None:
         assert photo["user"]["id"] == str(user.id)
         assert photo["user"]["name"] == user.name
         assert "route_ids" in photo
-        assert str(route_id) in photo["route_ids"]
+        assert str(route.id) in photo["route_ids"]
         assert "routes" in photo
         assert isinstance(photo["routes"], list)
         assert len(photo["routes"]) >= 1
@@ -557,7 +498,6 @@ def test_get_v1_photos_my_invalid_or_missing_bbox_returns_400() -> None:
             )
         assert resp_invalid.status_code == 400
         assert resp_invalid.json()["error"]["code"] == "VALIDATION_ERROR"
-        # Missing bbox is a validation error on the query param as well
         assert resp_missing.status_code == 400
         assert resp_missing.json()["error"]["code"] == "VALIDATION_ERROR"
     finally:
