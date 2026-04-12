@@ -1,599 +1,497 @@
 # Photowalker Product Requirements Document
 
-Single source of truth for the Photowalker product. Reflects the actual implemented state of the codebase as of 2026-04-12 (verified against codebase review `docs/plans/2026-03-06-codebase-review-report.md`). Unimplemented features are listed separately in [Section 8 — Planned but Not Yet Implemented](#8-planned-but-not-yet-implemented).
+Single source of truth for the Photowalker product. Written from scratch 2026-04-13 based on the current implemented state and validated product direction.
 
-Previous version archived at [design/history/PRD_v7.md](history/PRD_v7.md).
+Previous version archived at [design/history/PRD_v8.md](history/PRD_v8.md).
 
 ---
 
 ## Table of Contents
 
-1. [Project Specifics](#1-project-specifics)
-2. [Team Goals and Business Objectives](#2-team-goals-and-business-objectives)
-3. [Background and Strategic Fit](#3-background-and-strategic-fit)
-4. [Assumptions](#4-assumptions)
-5. [User Stories and Requirements](#5-user-stories-and-requirements)
-6. [User Interaction and Design](#6-user-interaction-and-design)
-7. [Technical Specification](#7-technical-specification)
-8. [Planned but Not Yet Implemented](#8-planned-but-not-yet-implemented)
-9. [Known Gaps and Issues](#9-known-gaps-and-issues)
-10. [Out of Scope](#10-out-of-scope)
-11. [Open Questions](#11-open-questions)
-12. [UAT Verification](#12-uat-verification)
-13. [References](#13-references)
+1. [Product Overview](#1-product-overview)
+2. [Authentication & Accounts](#2-authentication--accounts)
+3. [Photo Library](#3-photo-library)
+4. [Map & Browse Experience](#4-map--browse-experience)
+5. [Routes Panel & Discovery](#5-routes-panel--discovery)
+6. [Route Detail & Viewing](#6-route-detail--viewing)
+7. [Route Creation](#7-route-creation)
+8. [Navigation & UI Structure](#8-navigation--ui-structure)
+9. [Non-Functional Requirements](#9-non-functional-requirements)
+10. [Known Issues](#10-known-issues)
+11. [Planned Features](#11-planned-features)
+12. [API Reference](#12-api-reference)
 
 ---
 
-## 1. Project Specifics
+## 1. Product Overview
 
-| Field | Value |
-|-------|-------|
-| **Participants** | Product owner, development team, stakeholders |
-| **Status** | Beta — core flows complete; several planned features outstanding |
-| **Target Release** | Beta / production launch |
-| **Primary Document** | This PRD (single source of truth) |
-| **Last verified** | 2026-04-12 (see codebase review report) |
+### Vision
 
----
+Photowalker lets photographers upload and share their photos on a map. They can curate routes that inspire others to retrace their steps and see the world through their lens.
 
-## 2. Team Goals and Business Objectives
+### Core Philosophy
 
-### Problem
+- **Photos are primary.** Every geotagged photo is visible on the public map the moment it is uploaded — routes are not a prerequisite for discovery. Routes are the primary way to organise, connect, and share photos.
+- **Map-first.** The map is the primary canvas. All UI surfaces (panels, drawers, modals) are overlays on top of it.
+- **Local and visual.** The default experience is immediate and geographic — open the app, see what has been photographed near you.
 
-Instagram has become less engaging for photographers. The real community in photography is found in photowalks—organized walks where photographers explore locations together and share stories through pictures. There is no dedicated platform that combines route planning, geolocated photos, and community discovery in one place.
+### Personas
 
-### Solution
-
-Photowalker is a web application that enables photographers to create, share, and discover photowalk routes with geolocated photos. It combines route planning (hiking-app style) with photo sharing (Instagram-style), designed specifically for photographers.
-
-**Core Concept:** Each photowalk is a "living object" that combines:
-- A curated route (the path walked)
-- Photos taken at specific locations along that route
-- Narrative and context
-
-### Goals
-
-- Enable photographers to create and share photowalk routes with geolocated photos
-- Provide a map-first discovery experience for browsing routes and photos by location
-- Build a community-driven library of discoverable photowalk experiences
-- Achieve product-market fit before exploring monetization
-
-### Success Criteria
-
-- Users can successfully create and share photowalk routes
-- Photos are correctly geolocated and displayed on maps
-- Public routes are discoverable through browsing
-- Core flow (create, upload, share, view) works smoothly
-- Initial user feedback is positive
-
-### Success Metrics
-
-| Category | Metrics |
-|----------|---------|
-| User Engagement | Routes created, photos uploaded, route views, average photos per route |
-| Platform Health | User retention, route discovery, geographic coverage |
-| Technical | API p95 <200ms, map load <2s, thumbnail load <500ms |
+| Persona | Description | Auth required |
+|---|---|---|
+| **Creator** | Uploads photos, builds and publishes routes | Yes |
+| **Explorer** | Browses photos and routes, gets inspired, saves routes and engages with the community | Yes |
+| **Anonymous Visitor** | Views the public photo map, browses photo pins and their details, reads public routes and galleries — enough to understand the value of the app and be motivated to create an account | No |
 
 ---
 
-## 3. Background and Strategic Fit
+## 2. Authentication & Accounts
 
-### Target Users
+### Requirements
 
-**Primary:** Photographers who participate in or organize photowalks (street, landscape, urban, enthusiasts)
+- Sign in with Google OAuth only; one-click flow
+- JWT access token (15 min); HTTP-only refresh cookie (7 days)
+- Session persists across page reloads via token refresh
+- Sign out clears the refresh cookie
+- Authenticated users can update their name and default map location
 
-**Secondary:** Anyone interested in discovering interesting routes and visual stories
+### What requires authentication
 
-### What Makes Photowalker Different
+- Uploading photos
+- Creating and editing routes
+- Accessing the Photos panel (personal library)
+- Future: saving routes, commenting
 
-1. **Geographic Focus:** Routes and photos are tied to real-world locations, enabling discovery by place
-2. **Route-Centric:** Unlike Instagram (photo-centric) or Strava (activity-centric), Photowalker centers on the route as the primary object
-3. **Photo Reuse:** Photos can belong to multiple routes, enabling creative storytelling
-4. **Community Discovery:** Public routes create a discoverable library of photowalk experiences
+### Anonymous access
 
-### Technical Approach
+- Full read access to the public photo map and all public routes
+- No account-gated paywalls or content restrictions on public content
 
-- **Backend:** FastAPI (Python) API with PostgreSQL + PostGIS, AWS S3 for photo storage
-- **Frontend:** React + TypeScript, MapLibre GL JS, Vite
-- **Auth:** Google OAuth only
-- **Deployment:** Docker, documented in [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md)
+### Known issues
 
----
-
-## 4. Assumptions
-
-### Technical Assumptions
-
-- JPEG is the only supported format for now
-- Photos may or may not have GPS metadata (EXIF); if EXIF GPS is missing, photos are still accepted but must be manually placed on the map before publishing a route
-- Maximum 50 photos per route; maximum 10MB per photo
-- PostGIS for efficient spatial queries; WGS84 (EPSG:4326) for all geometries
-- Web-first approach is sufficient for initial launch
-
-### Business Assumptions
-
-- Photographers want to share routes and discover new locations
-- Community will create valuable content organically
-- Geographic discovery is a key differentiator
-- Map-first UI will support future mobile adaptation
-
-### Design Assumptions
-
-- Shared understanding of the target customer between product, design, and development
-- Layout and components should be structured for future mobile conversion without redefining flows
-- Bottom drawer and collapsible panel patterns work across desktop and future mobile
+- Sign out does not server-side invalidate the refresh token — a stolen token remains valid for 7 days post-logout
+- `test-login` E2E endpoint is always registered in OpenAPI regardless of config
+- Refresh cookie `secure` flag is `False` in non-production environments
+- `initPromise` persists across logout/re-login in the same session — re-init is skipped
 
 ---
 
-## 5. User Stories and Requirements
+## 3. Photo Library
 
-### 5.1 Authentication and Accounts (FR1)
+### Core behaviour
 
-**User Story:** As a user, I can sign in with Google OAuth.
+- Any authenticated user can upload JPEG photos (max 10MB each)
+- Photos with EXIF GPS are automatically plotted on the map at upload
+- Photos without EXIF GPS are accepted and stored — they appear in the user's library but not on the public map until a location is manually assigned
+- All geotagged photos from all users are visible on the public map, regardless of whether they belong to a route
+- A thumbnail is generated asynchronously after upload (RQ worker, stored in S3)
+- Photos can belong to zero, one, or many routes
 
-**Acceptance Criteria:**
-- One-click Google sign-in; JWT issued; session persists via refresh token
-- Sign out clears the refresh token cookie (note: server-side token revocation is not yet implemented — see [Section 9](#9-known-gaps-and-issues))
-- Edge cases: existing account logs in; OAuth failure shows error; token refresh failure redirects to login
+### Bulk upload
 
-**Implemented:** Google OAuth exchange, JWT (15 min), HTTP-only refresh cookie (7 days), `/auth/me`, `/auth/refresh`, `/auth/logout` (cookie clear only)
+- Creators can upload multiple photos at once to their library without creating a route
+- Per-file upload status is shown (queued, uploading, done, failed)
+- This is a standalone flow — not tied to route creation
 
-### 5.2 Route Creation (FR2)
+### Photos panel
 
-**User Story:** As a user, I can create a photowalk route, primarily from photos, and optionally by drawing.
+- Authenticated users can view their own photo library in the Photos panel
+- The panel shows the user's photos within the current map viewport
+- An "Upload photos" button in the panel opens the bulk upload flow
+- The panel updates as the user moves the map
+- **Known bug:** The Photos panel is currently implemented but not displaying photos
 
-**Acceptance Criteria:**
-- Upload photos (with or without GPS)
-- For photos without GPS: place each on the map (MapPicker) before publishing
-- Adjust order (drag-and-drop), connect photos on the map, add title/description/tags
-- Create route via `POST /v1/routes/from-photos` with ordered `photo_ids`
-- Backend derives route LineString geometry from photo locations and computes distance
-- System validates: at least 2 photo points with locations, distance >0, title 1–100 chars, ≤5 tags
-- Routes are private by default; publishing makes them public
+### Photo management
 
-**Implemented:** Complete.
-
-### 5.3 Photo Upload and Association (FR3)
-
-**User Story:** As a user, I can upload photos and attach them to routes.
-
-**Acceptance Criteria:**
-- JPEG upload (max 10MB, max 50 per route); EXIF GPS used when present
-- If EXIF GPS is missing, the photo is still accepted; `photos.location` is stored as `NULL` until the user places the photo on the map
-- Thumbnail generated asynchronously (RQ worker); photo stored in S3
-- Photos can be associated with one or more routes
-
-**Implemented:** All of the above.
-
-### 5.4 Route Viewing (FR4)
-
-**User Story:** As a visitor, I can view a shared route via public URL.
-
-**Acceptance Criteria:**
-- Route at `/routes/{slug}`; map with polyline and photo pins; gallery with lightbox
-- Metadata: title, description, author, date, distance, tags
-- Invalid slug → 404; private route → 403 unless owner
-
-**Implemented:** All of the above.
-
-### 5.5 Route Browsing and Discovery (FR5)
-
-**User Story:** As a visitor, I can browse public routes and photos on the map.
-
-**Acceptance Criteria:**
-- Browse page with map; bbox-based queries; filter by tags, author
-- Photo pins in viewport (from `GET /v1/photos?bbox=`)
-- Paginated route list; sort by date or distance
-
-**Implemented:** All of the above.
-
----
-
-### 5.6 Advanced Route & Photo Workflows (Implemented)
-
-#### Photo-first Route Creation (FR-R1)
-
-**User Story:** As a user, I can create a route by uploading photos and connecting them on a map.
-
-**Key Behaviour:**
-- Primary entry: "Create route from photos"
-- Upload one or more JPEGs (max 50)
-- Photos with EXIF GPS are plotted automatically; photos without GPS must be placed on the map before publishing
-- Points are initially ordered by `captured_at` (or upload order if missing)
-- User can reorder photos (drag-and-drop) and provide title, description, tags, and visibility
-- Backend validates at least 2 photos with locations; builds LineString geometry; computes distance
-
-**Implemented:** Complete.
-
-#### Route–Photo Geometry Consistency (FR-R2)
-
-**User Story:** As a user, I expect routes to always reflect the photos they contain.
-
-**Key Behaviour:**
-- Route geometry is always derived from the ordered set of route photos
-- `routes.route_geometry` is computed from photo locations in `display_order`
-- A published route must have at least 2 photos with locations
-
-**Implemented:** Complete.
-
-#### Photos Without Location & Location Editing (FR-R3)
-
-**User Story:** As a user, I can upload photos without GPS and place them on the map, and I can edit photo locations later.
-
-**Key Behaviour:**
-- `photos.location` is nullable; uploads without EXIF GPS are stored with `location = NULL`
-- UI surfaces a "Place on map" flow for photos without locations
-- `PATCH /v1/photos/{id}` supports updating `location` (Point or `null`)
+- Creators can edit a photo's caption and location at any time
 - Editing a photo's location that belongs to a route triggers route geometry recomputation
-- Publishing a route enforces that all route photos have locations
+- Creators can delete a photo globally (removes it from all routes and the map)
 
-**Implemented:** Complete.
+### Limits
 
-#### Thumbnail Pins (FR-R4)
+- Max 10MB per photo
+- JPEG only
 
-**User Story:** As a user, I see photo thumbnails as map pins.
+### Known issues
 
-**Key Behaviour:**
-- Photo pins render thumbnails (~40–48px) when available, with a fallback dot while thumbnail generation is pending
-- Nearby photos are clustered at low zoom with stacked thumbnail display
-
-**Implemented:** Thumbnail pins and stacking are complete. Cluster count badge is not yet rendered (see [Section 9](#9-known-gaps-and-issues)).
+- Photo upload in the route creation flow is sequential — should use concurrent upload with a concurrency limit
+- S3 delete errors are silently swallowed — should log at warning level
 
 ---
 
-### 5.7 Map & UI/UX Requirements (Implemented)
+## 4. Map & Browse Experience
 
-#### Map-first Layout and Shell
+### First impression
 
-**User Story:** As a user, the map is always the primary canvas; other UI appears as overlays.
+- The app opens centred on the user's current location (or a sensible default)
+- Photo pins are immediately visible for all geotagged photos in the viewport
+- No sign-in required to browse
 
-**Key Behaviour:**
-- A single `MapShell` renders one full-viewport MapLibre map (100vw × 100vh minus minimal chrome)
-- `MapShell` manages modes: `home`, `browse-photos`, `detail`, `create`, `browse`
-- Overlays appear on top of the map; URL drives state
+### Photo pins
 
-| Pathname | Mode |
-|----------|------|
-| `/` | `home` |
-| `/browse` | `browse-photos` |
-| `/routes/create` | `create` |
-| `/routes/:slug` | `detail` |
+- Each geotagged photo appears as a thumbnail pin on the map
+- Clicking a pin opens a lightbox showing: the photo, the photographer's name, and any routes the photo belongs to
+- From the lightbox, a user can navigate to any of those routes
+- Pin density updates as the user pans and zooms
 
-**Implemented:** Complete. (Note: `explore-route-highlight` mode described in older PRD versions is not in the `MapShellMode` type; route highlighting is handled within the `browse-photos` mode.)
+### Route highlighting
 
-#### Explore Panel, Bottom Drawer, and Account UI (FR-U1–FR-U7)
+- When a route is hovered or selected in the Routes panel, its polyline is highlighted on the map and its photos are visually emphasised
+- **Known bug:** Route highlighting is currently broken and must be fixed
 
-| ID | User Story | Status |
-|----|------------|--------|
-| FR-U1 | `/` redirects to `/browse`; dismissible welcome modal (sessionStorage) | ✓ Implemented |
-| FR-U2 | Photos-only default browse; photo lightbox (photo, user, routes) | ✓ Implemented |
-| FR-U3 | Explore routes panel — All/My filter, route cards, Create route button, hover highlights route on map | ✓ Implemented |
-| FR-U4 | Bottom drawer for route view and create — peek + expand | ✓ Implemented |
-| FR-U5 | Account in top-right only — Sign in, Settings, Sign out | ✓ Implemented |
-| FR-U6 | My routes as filter only — no `/routes/me` page | ✓ Implemented (backend `GET /v1/routes/me` exists but no frontend page) |
-| FR-U7 | Mobile-ready structure — rem/%, touch targets ≥44px | ✓ Mostly implemented (AccountIcon touch target is 40px — see [Section 9](#9-known-gaps-and-issues)) |
+### Welcome experience
 
-#### Basemap Styling
-
-- Vector basemap via OpenFreeMap (no API key required)
-- Warm, photography-friendly palette (prettymaps-like)
-- App layers (routes, clusters, photo markers) render above basemap layers
-
----
-
-### 5.8 Non-Functional Requirements
-
-| ID | Area | Requirement | Status |
-|----|------|-------------|--------|
-| NFR1 | Performance | Map load <2s; thumbnail <500ms; API p95 <200ms | Target |
-| NFR2 | Storage | 100 routes/user; 50 photos/route; 10MB/photo; 5GB total/user (soft) | Enforced at upload |
-| NFR3 | Rate limiting | 100 req/min (anonymous); 500 req/min (auth); 10 uploads/min | ✓ Implemented (in-memory, per-process) |
-| NFR4 | Security | JWT 15min; refresh 7 days HTTP-only; HTTPS; CORS for frontend | ✓ Partial (no server-side revocation — see Section 9) |
-| NFR5 | Testing | ≥80% unit coverage; integration for all endpoints; E2E for critical flows | ⚠ Coverage gaps exist (see codebase review) |
-
----
-
-## 6. User Interaction and Design
-
-### Design Principles
-
-- **Map-first:** The map is the primary surface; overlays and panels support it
-- **Collapsible panels:** Route list in left collapsible panel, not default view
-- **Bottom drawer:** Route view and create use same bottom-drawer pattern
-- **Account top-right:** Identity and settings behind circular user icon only
-- **Mobile-ready:** Components structured for future mobile conversion
-
-### Routing
-
-- `/` redirects to `/browse`
-- `/browse` — photos on map; welcome modal when unauthenticated
-- `/routes/:slug` — route detail in bottom drawer
-- `/routes/create` — create flow in bottom drawer (protected)
-- No `/routes/me` page; My routes is a filter in Explore panel
+- First-time anonymous visitors see a welcome modal explaining the app
+- The modal is dismissible and does not reappear in the same session (sessionStorage)
+- The modal is a conversion touchpoint — it should clearly communicate the value of signing up
 
 ### Navigation
 
-- **Menu bar (left):** Browse, Routes (opens Explore panel)
-- **Account (top-right):** Sign in, Settings, Sign out only
-- **Explore panel:** All | My routes filter; route cards; Create route button
-- **Bottom drawer:** Route gallery or create form; peek and expanded states
-
-### Core Flows
-
-1. **First impression:** Land on /browse; welcome modal if not signed in; dismissible via sessionStorage
-2. **Browse:** Map shows photo pins in viewport bbox; click opens PhotoGallery lightbox with photo, user, routes
-3. **Explore routes:** Open panel from menu; filter All/My routes; hover/select highlights route on map; click opens route in drawer
-4. **View route:** Bottom drawer with gallery, metadata, owner actions (edit photo location)
-5. **Create route:** Create button in panel only; drawer with upload → place → reorder → details → `POST /v1/routes/from-photos`
-
-### Flow Diagram
-
-```mermaid
-flowchart TB
-  Landing["Landing: / redirects to /browse"]
-  Welcome{"Signed in?"}
-  BrowseMap["Browse map (photos-only)\nPhoto pins, click → lightbox"]
-  MenuBar["Menu bar"]
-  ExplorePanel["Explore routes panel\n(left, collapsible)"]
-  Filters["Filters: All | My routes\n(when signed in)"]
-  RouteCards["Route cards\n(thumbnail + summary, paginated)"]
-  CreateBtn["Create route button"]
-  MapHighlight["Map: highlight selected route\nfade other photos"]
-  RouteSelected["Route selected"]
-  BottomSheetGallery["Bottom sheet: Route gallery\n(scrollable images + text)"]
-  BottomSheetCreate["Bottom sheet: Create route\n(upload, locations, order, text)"]
-  Account["Account (top-right circle)\nSign in | Settings | Sign out"]
-
-  Landing --> Welcome
-  Welcome -->|No| BrowseMap
-  Welcome -->|Yes| BrowseMap
-  BrowseMap --> MenuBar
-  MenuBar --> ExplorePanel
-  ExplorePanel --> Filters
-  ExplorePanel --> RouteCards
-  ExplorePanel --> CreateBtn
-  RouteCards --> MapHighlight
-  RouteCards --> RouteSelected
-  RouteSelected --> BottomSheetGallery
-  CreateBtn --> BottomSheetCreate
-  Account -.->|"Always available"| BrowseMap
-```
-
-### Map Modes
-
-| Mode | Context | Map Content |
-|------|---------|-------------|
-| `home` | `/` (redirects immediately) | n/a |
-| `browse-photos` | `/browse` | Photo pins in viewport bbox; route highlight when panel route hovered |
-| `detail` | `/routes/:slug` | Route polyline + photo pins for that route |
-| `create` | `/routes/create` | Preview line and markers during route drawing/building |
+- The nav rail (left edge) has three items: **Browse**, **Routes**, **Photos** (auth-gated)
+- Browse closes any open panel and returns to the plain map view
+- Open question: "Browse" as a dedicated nav item may be redundant and should be reviewed
 
 ---
 
-## 7. Technical Specification
+## 5. Routes Panel & Discovery
 
-### Database Schema
+### Routes panel
 
-- **users:** id, google_id, email, name, avatar_url, default_map_lat, default_map_lon
-- **routes:** id, user_id, slug, title, description, route_geometry (LineString), distance_meters, is_public, is_draft (column exists; no API surface yet — see Section 8)
-- **photos:** id, user_id, s3_key_original, s3_key_thumbnail, location (Point, nullable), caption, exif_data, captured_at
-- **route_photos:** route_id, photo_id, display_order (many-to-many join)
-- **tags, route_tags:** Tagging for routes
+- Accessible from the nav rail; slides in from the left over the map
+- Shows a filterable, paginated list of routes
+- Filters: **All routes** (public) and **My routes** (auth-gated)
+- Route cards show: thumbnail, title, author, distance, tags
+- Hovering a route card highlights that route on the map
+- Clicking a route card opens the route in the bottom drawer and shows the route polyline and photo pins on the map
+- A **Create route** button is present in the panel (auth-gated; prompts sign-in if anonymous)
 
-All geometries use PostGIS with SRID 4326 (WGS84). GIST indexes on geometries for bbox queries.
+### Discovery
 
-### API
+- Routes are sortable by date (default) or distance
+- Routes can be filtered by tags and author
+- Browse is bbox-aware — routes shown reflect the current map viewport
+- Public routes are discoverable by anyone without an account
 
-Base path: `/v1/`
+### My routes
 
-| Method | Endpoint | Auth | Purpose |
-|--------|----------|------|---------|
-| POST | /auth/google | — | Exchange Google code for JWT + refresh cookie |
-| POST | /auth/refresh | — | Refresh access token via cookie |
-| POST | /auth/logout | — | Clear refresh token cookie |
-| GET | /auth/me | Required | Current user |
-| PATCH | /auth/me | Required | Update user (name, default_map_location) |
-| GET | /routes | — | Browse public routes (bbox, tags, author_id, page, per_page, sort) |
-| POST | /routes/from-photos | Required | Create route from ordered photo list |
-| GET | /routes/me | Required | Current user's routes |
-| GET | /routes/{slug} | Optional | Route detail with photos (public or owner) |
-| GET | /routes/{route_id}/photos | Optional | Photos for a route (ordered) |
-| PUT | /routes/{route_id}/photos/order | Required | Reorder photos in a route (owner only) |
-| PATCH | /routes/{route_id} | Required | Update route title/description/tags/visibility |
-| DELETE | /routes/{route_id} | Required | Delete route (owner only) |
-| GET | /photos | — | Photos in bbox (map browse pins) |
-| POST | /photos | Required | Upload photo (multipart, JPEG, max 10MB) |
-| GET | /photos/my | Required | Current user's photos |
-| PATCH | /photos/{photo_id} | Required | Update caption, location, or route associations |
-| DELETE | /photos/{photo_id} | Required | Delete photo globally (owner only) |
-| GET | /photos/{photo_id}/image | Optional | Photo image (original or thumbnail variant) |
-| GET | /health | — | Application health check |
-| GET | /health/db | — | Database connectivity check |
-| GET | /health/storage | — | S3 storage connectivity check |
+- "My routes" is a filter within the Routes panel — there is no separate `/routes/me` page
+- Authenticated users can see their own public and private routes under this filter
+
+### Known issues
+
+- Route highlight on hover is currently broken
+
+---
+
+## 6. Route Detail & Viewing
+
+### Route detail experience
+
+- Routes are accessible at `/routes/:slug` — publicly shareable URL
+- The route opens in a bottom drawer (peek and expanded states) with the map showing the route polyline and photo pins
+- The drawer presents the route as a curated gallery — the experience should feel polished and editorial, not a plain list
+- Route metadata displayed: title, description, author, distance, tags, date published
+
+### Gallery
+
+- Photos are displayed in their curated display order
+- Clicking a photo opens the full lightbox
+- The gallery is the centrepiece of the route detail — this area requires significant design work to feel like a proper photographic presentation
+
+### Access control
+
+- Public routes: visible to anyone
+- Private routes: visible to the owner only; returns 403 to all others
+- Invalid slug: returns 404
+
+### Owner actions
+
+- Edit title, description, and tags
+- Reorder photos (drag-and-drop)
+- Delete the route (with confirmation)
+- Edit individual photo locations (MapPicker)
+
+### Known issues
+
+- The route gallery in the bottom drawer needs significant UX improvement to feel curated
+- Modal backdrop clears only error state — the edit location modal stays open on backdrop click (`RouteDetail.tsx:246`)
+
+---
+
+## 7. Route Creation
+
+### Entry point
+
+- The **Create route** button in the Routes panel is the only entry point (auth-gated)
+- Route creation opens in the bottom drawer
+
+### Two creation paths
+
+**Path A — Upload new photos**
+- Creator uploads one or more JPEGs directly into the creation flow
+- Photos with EXIF GPS are auto-plotted on the map
+- Photos without GPS must have a location manually assigned (MapPicker) before publishing
+- Creator reorders photos to define the walk sequence
+- Backend derives the route LineString geometry from ordered photo locations and computes distance
+
+**Path B — Select from existing library (planned)**
+- Creator selects photos already in their library to build a route
+- Same ordering, location, and publishing rules apply as Path A
+- Not yet implemented — high priority planned feature
+
+### Reordering
+
+- Photos are reordered to define the sequence of the walk
+- Current reorder UX is considered clunky and needs improvement
+- A keyboard alternative for reorder is required (WCAG 2.1)
+
+### Route metadata
+
+- Title (required, 1–100 characters)
+- Description (optional)
+- Tags (optional, max 5)
+- Visibility: private by default; publishing makes the route public
+
+### Validation
+
+- At least 2 photos with assigned locations required to publish
+- All photos in the route must have a location before publishing
+
+### Known issues
+
+- Reorder UX needs improvement — drag-and-drop feels clunky
+- No keyboard alternative for reorder (WCAG 2.1 SC 2.1.1 failure)
+
+---
+
+## 8. Navigation & UI Structure
+
+### Layout
+
+- The map is always the primary canvas — full viewport (100vw × 100vh)
+- All UI surfaces are overlays on top of the map
+- Structured for future mobile conversion — rem/% sizing, touch targets ≥44px
+
+### Nav rail
+
+- Fixed to the left edge; always visible
+- Three items: **Browse**, **Routes**, **Photos** (Photos is auth-gated)
+- Browse: closes all panels and returns to the plain map
+- Routes: opens the Routes panel
+- Photos: opens the Photos panel (authenticated users only)
+- Open question: "Browse" as a nav item may be redundant — to be reviewed
+
+### Account icon
+
+- Fixed to the top-right corner; always visible
+- Contains: Sign in (if anonymous), Settings, Sign out
+- Settings is currently a stub — to be built out as account and library management
+
+### Bottom drawer
+
+- Shared component for route detail and route creation
+- Supports peek (partial) and expanded states
+- Dismissible; returns user to the map
+
+### Map modes
+
+| Mode | Path | Map content |
+|---|---|---|
+| `home` | `/` (redirects to `/browse`) | — |
+| `browse-photos` | `/browse` | Photo pins in viewport; route highlight when panel route is hovered |
+| `detail` | `/routes/:slug` | Route polyline + photo pins for that route |
+| `create` | `/routes/create` | Preview markers during route building |
+
+### Known issues
+
+- `AccountIcon` touch target is 40px — must be increased to ≥44px (WCAG 2.1)
+- `ErrorBoundary` renders raw stack trace to end users in production — must be guarded by environment
+
+---
+
+## 9. Non-Functional Requirements
+
+### Performance
+
+- Map load: <2s
+- Thumbnail load: <500ms
+- API p95 response time: <200ms
+
+### Storage & limits
+
+- Max 10MB per photo
+- JPEG only
+- Max 50 photos per route
+- Soft limits per user: 100 routes, 5GB total storage
+
+### Rate limiting
+
+- 100 requests/min — anonymous users
+- 500 requests/min — authenticated users
+- 10 photo uploads/min per user
+- Currently in-memory (per-process) — Redis required for multi-worker production deployments
+
+### Security
+
+- JWT access tokens: 15 min expiry
+- Refresh token: 7 days, HTTP-only cookie
+- HTTPS in production
+- CORS restricted to frontend origin
+- `SECRET_KEY` must be ≥32 characters (currently no enforcement — P0 issue)
+
+### Accessibility
+
+- Touch targets ≥44px (WCAG 2.1)
+- Keyboard navigable — all interactive elements reachable without a mouse
+- Screen reader compatible — interactive elements must not be `aria-hidden`
+
+### Testing
+
+- Backend: unit tests + integration tests for all endpoints
+- Frontend: component and hook unit tests; E2E for critical flows
+- Target: ≥80% unit test coverage (currently not enforced in CI)
+
+---
+
+## 10. Known Issues
+
+Issues are drawn from the codebase review (2026-03-06) and subsequent development. Some may have been resolved since the review — each should be verified before marking closed.
+
+### P0 — Security (ship blockers)
+
+| Issue | Location |
+|---|---|
+| `SECRET_KEY` has no minimum-length validation — weak key makes all JWTs forgeable | `core/config.py:26` |
+| Health endpoints return raw exception strings — exposes DB hostnames and S3 ARNs to unauthenticated callers | `api/v1/health.py:32-54` |
+
+### P1 — Functionality
+
+| Issue | Location |
+|---|---|
+| Photos panel not displaying photos | `ExplorePhotosPanel.tsx` |
+| Route highlight on hover broken | `Browse.tsx` / `HighlightedRouteContext` |
+| Sign out does not server-side invalidate the refresh token | `api/v1/auth.py:163-171` |
+| `test-login` endpoint always registered in OpenAPI regardless of config | `api/v1/auth.py:80-116` |
+| Refresh cookie `secure=False` in non-production | `api/v1/auth.py:72` |
+| `X-Forwarded-For` uses rightmost IP — rate limiting ineffective behind load balancer | `middleware/rate_limit.py:76-82` |
+| S3 delete errors silently swallowed on photo deletion | `services/photo_service.py:345-353` |
+| Thumbnail worker crashes on corrupt images — causes infinite RQ retries | `utils/thumbnail.py:20` |
+| `refreshPromise` race condition for concurrent 401s | `api/client.ts:60-79` |
+| `initPromise` persists across logout/re-login — re-init skipped in same session | `hooks/useAuth.ts:6` |
+| `clearUser()` does not clear component-level cached data on user switch | `store/authStore.ts:22` |
+| `Browse.tsx` pagination has no `.catch()` — silent failure, stale data shown | `pages/Browse.tsx:784-795` |
+| `RouteDetail.tsx` refetch has no error handling | `pages/RouteDetail.tsx:70-73` |
+| Modal backdrop clears error state only — edit location modal stays open on backdrop click | `pages/RouteDetail.tsx:246` |
+| `ErrorBoundary` renders raw stack trace to end users in production | `components/common/ErrorBoundary.tsx:44-49` |
+| `Browse.tsx` is ~958 lines mixing five distinct concerns — extract into hooks | `pages/Browse.tsx` |
+| Deprecated `@app.on_event` — migrate to lifespan | `core/factory.py:42-54` |
+| In-memory rate limit store is per-process — Redis required in production | `middleware/rate_limit.py:64-72` |
+
+### P1 — Accessibility
+
+| Issue | Location |
+|---|---|
+| Drag-and-drop photo reorder has no keyboard alternative (WCAG 2.1 SC 2.1.1) | `pages/CreateRouteFromPhotos.tsx:554-558` |
+| Cluster markers are `aria-hidden` but interactive | `pages/Browse.tsx:124` |
+
+### P2 — Tech debt & minor issues
+
+| Issue | Location |
+|---|---|
+| `AccountIcon` touch target is 40px — must be ≥44px | `components/common/AccountIcon.tsx:42-56` |
+| No runtime validation of API responses — TypeScript casts only | `api/client.ts` et al. |
+| `Route` frontend type missing `is_draft` field | `types/route.ts` |
+| `RouteResponse.is_draft` has hardcoded default `= False` | `schemas/route.py:108` |
+| `Photo.captured_at` stored as timezone-naive datetime | `utils/exif.py:76` |
+| `User.default_map_lat/lon` have no range constraints | `models/user.py:30-31` |
+| `_bbox_area_m2` duplicated across discovery and photo services | `services/` |
+| `auth_service.logout()` is dead code | `services/auth_service.py:74-76` |
+| `ensure_unique_slug` sync variant is dead code | `utils/slug.py:35-53` |
+| `photo_service` imports from schemas layer — dependency inversion | `services/photo_service.py:278` |
+| `Settings.tsx` is a placeholder stub | `pages/Settings.tsx` |
+| `useRoutes.ts` and `useMap.ts` are empty stubs | `hooks/` |
+| Map/List toggle buttons have no `aria-pressed` state | `pages/Browse.tsx:891-916` |
+| No CI coverage gate enforcing ≥80% unit coverage | CI config |
+
+### Test coverage gaps (P1)
+
+| Gap | Risk |
+|---|---|
+| `useAuth` hook has zero test coverage | High |
+| `PhotoUploadForm` has zero test coverage | High |
+| `thumbnail_job.py` orchestration entirely untested | High |
+| All service tests (`route_service`, `photo_service`, `discovery_service`) gated behind Postgres — zero unit coverage | High |
+| Integration: PATCH/DELETE route success paths not tested | Medium |
+| Integration: DELETE photo success and 404 not tested | Medium |
+| Integration: private route exclusion from `GET /v1/routes` not tested | Medium |
+
+---
+
+## 11. Planned Features
+
+Features are ordered roughly by priority. None are committed to a timeline.
+
+### High priority
+
+| Feature | Description |
+|---|---|
+| Route creation from existing library photos | Creator selects photos already uploaded to their library to build a route, rather than uploading fresh |
+| Unified upload flow | The two upload paths (standalone library upload and route creation upload) should feel like a single coherent experience |
+| Route gallery redesign | The route detail bottom drawer should present photos as a curated, polished gallery — the centrepiece of the route experience |
+| Route highlight fix | Hovering a route card in the Routes panel should reliably highlight that route on the map |
+| Photos panel fix | The Photos panel should correctly display the user's photos in the current viewport |
+| GPX export | `GET /v1/routes/{slug}/gpx` returns a GPX file with the route track and photo waypoints; export button in route detail view |
+
+### Medium priority
+
+| Feature | Description |
+|---|---|
+| Settings page | Account management, photo library management, preferences |
+| Photo clustering | Intelligent clustering of dense photo pins at lower zoom levels; design TBD |
+| Remove photo from route | Dissociate a photo from a route without deleting it globally; requires ≥2 photos to remain |
+| Reorder photos on existing routes | Edit the photo order on an already-published route via the route detail view |
+| Anonymous visitor conversion | Welcome modal and sign-up prompts optimised for conversion |
+
+### Future / lower priority
+
+| Feature | Description |
+|---|---|
+| Saving routes | Authenticated Explorers can save routes to a personal collection |
+| Comments | Explorers can comment on routes |
+| User profiles | Public profile pages showing a creator's routes and photos |
+| Following | Explorers can follow creators |
+| Social sharing | Share a route to external platforms beyond the public URL |
+| Search | Text search for routes, photographers, and locations |
+| Mobile app | Native iOS/Android experience |
+| Recommendations & trending | Algorithmically surfaced routes and photographers |
+
+---
+
+## 12. API Reference
 
 Full contract: [shared/openapi.yaml](../shared/openapi.yaml) (canonical at `/openapi.json` when running).
 
-### Key Components
-
-| Component | Purpose |
-|-----------|---------|
-| `MapShell` | Root map layout; mode: `home`, `browse-photos`, `detail`, `create` |
-| `MapView` | MapLibre GL canvas mount and style load |
-| `ExploreRoutesPanel` | Left collapsible panel; All/My filter, route list, Create button |
-| `BottomDrawer` | Shared peek/expand drawer for route view and create |
-| `PhotoGallery` | Lightbox for single or multiple photos (browse and route detail) |
-| `PhotoUploadForm` | File input, caption, upload progress, EXIF preview |
-| `AccountIcon` | Top-right circular user icon with dropdown |
-| `RouteDrawer` | MapLibre GL Draw wrapper for polyline drawing |
-| `MapPicker` | Single-point coordinate picker for placing unlocated photos |
-| `HighlightedRouteLayer` | Renders highlighted route polyline on map |
-| `PhotoMarker` | Thumbnail pin marker element |
-
-### Project Structure
-
-```
-photowalker-app/
-├── backend/          # FastAPI, services, models, auth, storage
-├── frontend/         # React, pages, components, map
-├── shared/           # openapi.yaml
-├── design/           # PRD (this file) and design history
-└── docs/             # DEVELOPMENT, DEPLOYMENT, TROUBLESHOOTING
-```
-
----
-
-## 8. Planned but Not Yet Implemented
-
-These features are in the PRD backlog but have no implementation in the current codebase.
-
-### Bulk Reorder & Add/Remove Photos on Existing Routes (FR-R5, FR-R6)
-
-- `PUT /v1/routes/{route_id}/photos/order` — **backend implemented**; no frontend UI yet
-- `DELETE /v1/routes/{route_id}/photos/{photo_id}` — remove a photo from a route without deleting it globally (backend and frontend both absent)
-- Frontend photo management panel for the route detail/edit view
-- Guard: published route must maintain ≥2 photos with locations
-
-### GPX Export (FR-R7)
-
-- `GET /v1/routes/{slug}/gpx` returning `application/gpx+xml` with track + photo waypoints
-- Export button in route detail view
-- Filename: `{route-slug}.gpx`; compatible with Google Maps and standard GPS apps
-
-### Undo/Redo in Create Flow (FR-R9)
-
-- Undo/redo stack over the `photos` state array in `CreateRouteFromPhotos`
-- Keyboard shortcuts: Ctrl+Z / Cmd+Z (undo), Ctrl+Shift+Z / Cmd+Shift+Z (redo)
-- History limited to ~20 actions
-
-### Route Drafts (FR-R10)
-
-- `is_draft` column exists in the DB model and migration but has no API surface
-- Endpoints needed: `POST /v1/drafts`, `GET /v1/drafts`, `PATCH /v1/drafts/{id}/publish`, `DELETE /v1/drafts/{id}`
-- Frontend draft save/list/publish flow
-- Drafts are owner-only and excluded from public browse
-
----
-
-## 9. Known Gaps and Issues
-
-Issues confirmed in codebase review. Grouped by severity.
-
-### Security (P0)
-
-| Issue | Location | Detail |
-|-------|----------|--------|
-| `SECRET_KEY` has no min-length validation | `core/config.py:26` | A weak key makes all JWTs forgeable. Should reject keys <32 chars or known placeholders. |
-| Health endpoints leak internal error strings | `api/v1/health.py:32-54` | `"error": str(e)` in 503 body can expose DB hostnames, S3 ARNs. Should log server-side only. |
-
-### Security (P1)
-
-| Issue | Location | Detail |
-|-------|----------|--------|
-| Logout does not server-side invalidate refresh token | `api/v1/auth.py:163-171` | Stolen refresh token remains valid for 7 days post-logout. |
-| `test-login` endpoint always registered in OpenAPI | `api/v1/auth.py:80-116` | Should only be included when `e2e_test_secret` is set. |
-| Refresh cookie `secure=False` in non-production | `api/v1/auth.py:72` | Staging sends refresh token over plain HTTP. |
-| `X-Forwarded-For` uses rightmost IP | `middleware/rate_limit.py:76-82` | Behind a load balancer, all users share one rate-limit bucket. Should use `split(",")[0].strip()`. |
-
-### Functionality (P1)
-
-| Issue | Location | Detail |
-|-------|----------|--------|
-| `initPromise` persists across logout/re-login | `hooks/useAuth.ts:6` | After logout + re-login in same session, session re-init is skipped. |
-| Cluster count badge not rendered | `pages/Browse.tsx` | Photo clusters show stacked thumbnails but no numeric count. |
-
-### UI/Accessibility (P2)
-
-| Issue | Location | Detail |
-|-------|----------|--------|
-| `AccountIcon` touch target is 40px | `components/common/AccountIcon.tsx:42-56` | PRD requires ≥44px (WCAG 2.1). |
-| Cluster markers `aria-hidden` but interactive | `pages/Browse.tsx:124` | WCAG failure — inaccessible to keyboard/screen reader users. |
-| Drag-and-drop reorder no keyboard alternative | `pages/CreateRouteFromPhotos.tsx:554-558` | WCAG 2.1 SC 2.1.1 failure. |
-| `Settings.tsx` is a placeholder stub | `pages/Settings.tsx` | Reachable from account dropdown; shows "coming soon" only. |
-
-### Code Quality (P2)
-
-| Issue | Location | Detail |
-|-------|----------|--------|
-| `@app.on_event` deprecated | `core/factory.py:42-54` | Migrate to `@asynccontextmanager` lifespan. |
-| `ErrorBoundary` renders raw stack trace in production | `components/common/ErrorBoundary.tsx:44-49` | Guard `<details>` block with `NODE_ENV === 'development'`. |
-| `Browse.tsx` is 958 lines | `pages/Browse.tsx` | Mixes API fetching, map layer management, cluster DOM, blob loading, and lightbox state. |
-
----
-
-## 10. Out of Scope
-
-The following are explicitly not in the current or planned release:
-
-### User Features
-- User profiles beyond name + avatar
-- Following, comments, likes, collections
-
-### Route Features
-- Collaborative editing, versioning, templates
-- Social sharing beyond public URL
-
-### Photo Features
-- Photo editing, RAW/PNG, video
-
-### Discovery
-- Filter/sort chips, search in panel, share button, save/bookmark
-- Offline mode, recommendations, trending
-
-### Technical
-- Native mobile apps
-- PWA / offline
-- WebSocket, real-time collaboration
-- Monetization features
-
----
-
-## 11. Open Questions
-
-| Question | Owner | Notes |
-|----------|-------|-------|
-| CDN for photo delivery | Infrastructure | S3 direct vs CloudFront |
-| Analytics integration | Product | Post-launch |
-| Monetization strategy | Business | After product-market fit |
-| Server-side token revocation | Backend | Redis blocklist or revocation table required |
-| Redis in production | Infrastructure | In-memory rate limiting is per-process; multi-worker requires Redis |
-
----
-
-## 12. UAT Verification
-
-Manual verification before release. Sign-off indicates all criteria pass.
-
-| ID | Requirement | Verification |
-|----|-------------|--------------|
-| UAT-U1 | Root redirects to browse | Navigate to `/` → redirect to `/browse` |
-| UAT-U2 | Welcome modal on browse when not signed in | Modal with Browse the map, Create account; dismiss → not shown again in session |
-| UAT-U3 | Account in top-right only | Sign in, Settings, Sign out only; no My routes or Create route in dropdown |
-| UAT-U4 | Nav: Browse, Routes | Drawer menu has Browse and Routes; Routes opens panel |
-| UAT-U5 | Browse default: photo pins; click → lightbox | Photo pins in viewport; pin click opens PhotoGallery lightbox |
-| UAT-U6 | Explore panel: filters, cards, Create | All/My routes filter; paginated list; Create route opens drawer or login redirect |
-| UAT-U7 | Panel collapse to icon strip | Collapse → narrow strip; expand → full panel |
-| UAT-U8 | Route card hover/select highlights on map | That route's photos highlighted, others faded |
-| UAT-U9 | Route card click opens drawer | Drawer with route gallery and metadata; map shows route |
-| UAT-U10 | Create route only from panel | Create button in panel only; drawer has upload, place, reorder, submit |
-| UAT-U11 | My routes only as filter | No /routes/me route; My routes only in panel filter |
-| UAT-U12 | Touch and accessibility | Tap highlights; Escape and focus behaviour |
-| UAT-C1 | Photo-first creation end-to-end | Upload JPEG with GPS → auto-plotted → reorder → title/tags → publish → route visible in browse |
-| UAT-C2 | Photo without GPS | Upload JPEG without GPS → "Place on map" flow → pin placed → route publishable |
-| UAT-C3 | Route detail | Navigate to `/routes/:slug` → polyline + photo pins on map → gallery in drawer |
-| UAT-C4 | Auth round-trip | Sign in with Google → session persists on reload → sign out → session cleared |
-
-**Sign-off:** _________________________ Date: ___________
-
----
-
-## 13. References
-
-| Document | Purpose |
-|----------|---------|
-| [docs/DEVELOPMENT.md](../docs/DEVELOPMENT.md) | Local setup, make targets, tests |
-| [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md) | Docker, production deployment |
-| [docs/TROUBLESHOOTING.md](../docs/TROUBLESHOOTING.md) | Common issues |
-| [shared/openapi.yaml](../shared/openapi.yaml) | API contract (canonical at /openapi.json when running) |
-| [CONTRIBUTING.md](../CONTRIBUTING.md) | Workflow, branching, PR process |
-| [design/history/PRD_v7.md](history/PRD_v7.md) | Previous PRD (aspirational, pre-codebase-review) |
-| [docs/plans/2026-03-06-codebase-review-report.md](../docs/plans/2026-03-06-codebase-review-report.md) | Full codebase review this document is based on |
+| Method | Endpoint | Auth | Purpose |
+|---|---|---|---|
+| POST | /v1/auth/google | — | Exchange Google OAuth code for JWT + refresh cookie |
+| POST | /v1/auth/refresh | — | Refresh access token via cookie |
+| POST | /v1/auth/logout | — | Clear refresh token cookie |
+| GET | /v1/auth/me | Required | Current user |
+| PATCH | /v1/auth/me | Required | Update name, default map location |
+| GET | /v1/routes | — | Browse public routes (bbox, tags, author_id, page, per_page, sort) |
+| POST | /v1/routes/from-photos | Required | Create route from ordered photo list |
+| GET | /v1/routes/me | Required | Current user's routes |
+| GET | /v1/routes/{slug} | Optional | Route detail with photos (public or owner) |
+| GET | /v1/routes/{route_id}/photos | Optional | Photos for a route (ordered) |
+| PUT | /v1/routes/{route_id}/photos/order | Required | Reorder photos in a route (owner only) |
+| PATCH | /v1/routes/{route_id} | Required | Update route title/description/tags/visibility |
+| DELETE | /v1/routes/{route_id} | Required | Delete route (owner only) |
+| GET | /v1/photos | — | Geotagged photos in bbox (public map pins) |
+| POST | /v1/photos | Required | Upload photo (multipart, JPEG, max 10MB) |
+| GET | /v1/photos/my | Required | Current user's photos in bbox |
+| PATCH | /v1/photos/{photo_id} | Required | Update caption, location, or route associations |
+| DELETE | /v1/photos/{photo_id} | Required | Delete photo globally (owner only) |
+| GET | /v1/photos/{photo_id}/image | Optional | Photo image (original or thumbnail variant) |
+| GET | /health | — | Application health check |
+| GET | /health/db | — | Database connectivity check |
+| GET | /health/storage | — | S3 storage connectivity check |
